@@ -2,6 +2,7 @@ mod blockchain;
 mod utils;
 
 use blockchain::{Chain, ProofOfWork};
+use chrono::Utc;
 
 fn main() {
     let pow = ProofOfWork::new(3);
@@ -12,6 +13,6 @@ fn main() {
     chain.unregister_node(&node1);
 
     println!("{:?}", chain);
-    chain.new_block("2nd Block".to_string());
+    chain.new_block("2nd Block".to_string(), Utc::now().timestamp());
     println!("{:?}", chain);
 }

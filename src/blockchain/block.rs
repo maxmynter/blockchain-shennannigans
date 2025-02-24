@@ -1,5 +1,3 @@
-use chrono::Utc;
-
 #[derive(Debug)]
 pub struct Block {
     pub index: u64,
@@ -11,8 +9,13 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(index: u64, data: String, proof: u64, previous_hash: String) -> Block {
-        let timestamp = Utc::now().timestamp();
+    pub fn new(
+        index: u64,
+        data: String,
+        timestamp: i64,
+        proof: u64,
+        previous_hash: String,
+    ) -> Block {
         let hash = crate::utils::hash(index, timestamp, &data, &previous_hash, proof);
 
         Block {

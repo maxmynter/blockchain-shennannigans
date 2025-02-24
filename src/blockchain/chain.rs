@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use chrono::Utc;
+
 use super::Block;
 
 pub trait Consensus: Sized {
@@ -25,19 +27,25 @@ impl<C: Consensus> Chain<C> {
         // Genesis Block
         let genesis_data = "Fiat Lux".to_string();
         let genesis_proof = blockchain.consensus.prove(&blockchain, &genesis_data);
-        let genesis_block = Block::new(0, genesis_data, genesis_proof, "0".to_string());
+        let genesis_block = Block::new(
+            0,
+            genesis_data,
+            Utc::now().timestamp(),
+            genesis_proof,
+            "0".to_string(),
+        );
         blockchain.chain.push(genesis_block);
 
         blockchain
     }
 
-    pub fn new_block(&mut self, data: String) -> &Block {
+    pub fn new_block(&mut self, data: String, timestamp: i64) -> &Block {
         let prev_block = self.chain.last().unwrap();
         let prev_hash = prev_block.hash.clone();
 
         let proof = self.consensus.prove(self, &data);
 
-        let block = Block::new(self.chain.len() as u64, data, proof, prev_hash);
+        let block = Block::new(self.chain.len() as u64, data, timestamp, proof, prev_hash);
         self.chain.push(block);
 
         self.chain.last().unwrap()
