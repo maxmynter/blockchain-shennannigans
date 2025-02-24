@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use super::Block;
 
+#[derive(Debug)]
 pub struct Chain {
     pub chain: Vec<Block>,
     pub nodes: HashSet<String>,
@@ -30,6 +31,7 @@ impl Chain {
 
         self.chain.last().unwrap()
     }
+
     pub fn register_node(&mut self, address: String) {
         self.nodes.insert(address);
     }
