@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use super::Block;
 
 pub trait Consensus: Sized {
-    fn proove(&self, chain: &Chain<Self>, data: &String) -> u64;
+    fn prove(&self, chain: &Chain<Self>, data: &String) -> u64;
     fn validate(&self, chain: &Chain<Self>, block: &Block) -> bool;
 }
 
@@ -24,7 +24,7 @@ impl<C: Consensus> Chain<C> {
 
         // Genesis Block
         let genesis_data = "Fiat Lux".to_string();
-        let genesis_proof = blockchain.consensus.proove(&blockchain, &genesis_data);
+        let genesis_proof = blockchain.consensus.prove(&blockchain, &genesis_data);
         let genesis_block = Block::new(0, genesis_data, genesis_proof, "0".to_string());
         blockchain.chain.push(genesis_block);
 
@@ -35,7 +35,7 @@ impl<C: Consensus> Chain<C> {
         let prev_block = self.chain.last().unwrap();
         let prev_hash = prev_block.hash.clone();
 
-        let proof = self.consensus.proove(self, &data);
+        let proof = self.consensus.prove(self, &data);
 
         let block = Block::new(self.chain.len() as u64, data, proof, prev_hash);
         self.chain.push(block);
@@ -45,6 +45,19 @@ impl<C: Consensus> Chain<C> {
 
     pub fn register_node(&mut self, address: String) {
         self.nodes.insert(address);
+    }
+    pub fn unregister_node(&mut self, address: &String) {
+        self.nodes.remove(address);
+    }
+    pub fn is_valid(&self) -> bool {
+        for i in 1..self.chain.len() {
+            let prev = &self.chain[i - 1];
+            let curr = &self.chain[i];
+            if curr.previous_hash != prev.hash || self.consensus.validate(self, curr) {
+                return false;
+            }
+        }
+        return true;
     }
 }
 
@@ -60,7 +73,7 @@ impl ProofOfWork {
 }
 
 impl Consensus for ProofOfWork {
-    fn proove(&self, chain: &Chain<Self>, data: &String) -> u64 {
+    fn prove(&self, chain: &Chain<Self>, data: &String) -> u64 {
         let previous_hash = if chain.chain.is_empty() {
             "0".to_string() // Genesis Case
         } else {
