@@ -1,22 +1,25 @@
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
 #[derive(Debug)]
-pub struct Block {
+pub struct Block<P> {
     pub index: u64,
     pub timestamp: i64,
     pub data: String,
     pub previous_hash: String,
     pub hash: String,
-    pub proof: u64,
+    pub proof: P,
 }
 
-impl Block {
+impl<P: Clone + Serialize + DeserializeOwned> Block<P> {
     pub fn new(
         index: u64,
         data: String,
         timestamp: i64,
-        proof: u64,
+        proof: P,
         previous_hash: String,
-    ) -> Block {
-        let hash = crate::utils::hash(index, timestamp, &data, &previous_hash, proof);
+    ) -> Block<P> {
+        let hash = crate::utils::hash(index, timestamp, &data, &previous_hash, &proof);
 
         Block {
             index,

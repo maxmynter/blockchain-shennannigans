@@ -1,17 +1,20 @@
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::collections::HashSet;
 
 use chrono::Utc;
 
 use super::Block;
 
-pub trait Consensus: Sized {
-    fn prove(&self, chain: &Chain<Self>, data: &String) -> u64;
-    fn validate(&self, chain: &Chain<Self>, block: &Block) -> bool;
+pub trait Consensus: Sized + Clone + Send + Sync + 'static {
+    type Proof: Clone + Serialize + DeserializeOwned;
+    fn prove(&self, chain: &Chain<Self>, data: &str) -> Self::Proof;
+    fn validate(&self, chain: &Chain<Self>, block: &Block<Self::Proof>) -> bool;
 }
 
 #[derive(Debug)]
 pub struct Chain<C: Consensus> {
-    pub chain: Vec<Block>,
+    pub chain: Vec<Block<C::Proof>>,
     pub nodes: HashSet<String>,
     consensus: C,
 }
@@ -39,7 +42,7 @@ impl<C: Consensus> Chain<C> {
         blockchain
     }
 
-    pub fn new_block(&mut self, data: String, timestamp: i64) -> &Block {
+    pub fn new_block(&mut self, data: String, timestamp: i64) -> &Block<C::Proof> {
         let prev_block = self.chain.last().unwrap();
         let prev_hash = prev_block.hash.clone();
 
@@ -69,7 +72,7 @@ impl<C: Consensus> Chain<C> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProofOfWork {
     difficulty: usize,
 }
@@ -81,7 +84,9 @@ impl ProofOfWork {
 }
 
 impl Consensus for ProofOfWork {
-    fn prove(&self, chain: &Chain<Self>, data: &String) -> u64 {
+    type Proof = u64;
+
+    fn prove(&self, chain: &Chain<Self>, data: &str) -> Self::Proof {
         let previous_hash = if chain.chain.is_empty() {
             "0".to_string() // Genesis Case
         } else {
@@ -98,7 +103,7 @@ impl Consensus for ProofOfWork {
                 timestamp,
                 &data,
                 &previous_hash,
-                proof,
+                &proof,
             );
             if hash.starts_with(&target) {
                 return proof;
@@ -107,7 +112,7 @@ impl Consensus for ProofOfWork {
         }
     }
 
-    fn validate(&self, _chain: &Chain<Self>, block: &Block) -> bool {
+    fn validate(&self, _chain: &Chain<Self>, block: &Block<Self::Proof>) -> bool {
         let target = "0".repeat(self.difficulty);
         block.hash.starts_with(&target)
     }
