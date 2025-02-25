@@ -1,18 +1,23 @@
+mod api;
 mod blockchain;
 mod utils;
 
+use api::server;
 use blockchain::{Chain, ProofOfWork};
 use chrono::Utc;
 
-fn main() {
-    let pow = ProofOfWork::new(3);
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    let mut chain = Chain::new(ProofOfWork::new(4));
 
-    let mut chain = Chain::new(pow);
-    let node1 = "http://localhost:8080".to_string();
-    chain.register_node(node1.clone());
-    chain.unregister_node(&node1);
+    chain.register_node("http://127.0.0.1:8081".to_string());
 
-    println!("{:?}", chain);
-    chain.new_block("2nd Block".to_string(), Utc::now().timestamp());
-    println!("{:?}", chain);
+    let block = chain.new_block("Ad Astra".to_string(), Utc::now().timestamp());
+
+    if let Err(e) = api::client::broadcast_block(&chain, &block.clone()).await {
+        eprintln!("Failed to broadcast block {}", e);
+    }
+
+    server::run_server(chain, "127.0.0.1:8080").await?;
+    Ok(())
 }

@@ -1,27 +1,30 @@
 use crate::blockchain::{Block, Chain, Consensus};
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 
 #[derive(Serialize, Deserialize)]
-struct ChainWrapper<P: Serialize + DeserializeOwned> {
+struct ChainWrapper<P> {
     chain: Vec<Block<P>>,
 }
 
 // Get /chain: Returns current chain
-async fn get_chain<C: Consensus>(data: web::Data<Chain<C>>) -> impl Responder {
+async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+    let chain = data.lock().unwrap();
     let wrapper = ChainWrapper {
-        chain: data.chain.clone(),
+        chain: chain.chain.clone(),
     };
     HttpResponse::Ok().json(wrapper)
 }
 
 // Post /block : Receives a new block and validates it
 async fn post_block<C: Consensus>(
-    data: web::Data<Chain<C>>,
-    block: web::Json<Block<C: Proof>>,
+    data: web::Data<Mutex<Chain<C>>>,
+    block: web::Json<Block<C::Proof>>,
 ) -> impl Responder {
-    let mut chain = data.into_inner();
-    if chain.consesnsus = validate(&chain, &block) {
+    let mut chain = data.lock().unwrap();
+    if chain.consensus.validate(&chain, &block) {
         chain.chain.push(block.into_inner());
         HttpResponse::Ok().body("Block added")
     } else {
@@ -30,8 +33,11 @@ async fn post_block<C: Consensus>(
 }
 
 // Start server with given chain and address
-pub async fn run_server<C: Consensus>(chain: Chain<C>, address: &str) -> std::io::Result<()> {
-    let chain_data = web::Data::new(chain);
+pub async fn run_server<C: Consensus>(chain: Chain<C>, address: &str) -> std::io::Result<()>
+where
+    C::Proof: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    let chain_data = web::Data::new(Mutex::new(chain));
     HttpServer::new(move || {
         App::new()
             .app_data(chain_data.clone())
