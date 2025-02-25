@@ -1,0 +1,33 @@
+# test_api.http
+# Test 8080 port
+### Get chain
+GET http://127.0.0.1:8080/chain
+
+### Post block
+POST http://127.0.0.1:8080/block
+Content-Type: application/json
+
+{
+  "index": 1,
+  "timestamp": 1645754040,
+  "data": "Test Block",
+  "previous_hash": "0",
+  "hash": "",
+  "proof": 42
+}
+
+### Get chain
+GET http://127.0.0.1:8081/chain
+
+### Post block
+POST http://127.0.0.1:8081/block
+Content-Type: application/json
+
+{
+  "index": 1,
+  "timestamp": 1645754040,
+  "data": "Test Block",
+  "previous_hash": "0",
+  "hash": "",
+  "proof": 42
+}
