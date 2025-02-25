@@ -9,6 +9,11 @@ struct ChainWrapper<P> {
     chain: Vec<Block<P>>,
 }
 
+#[derive(Deserialize)]
+struct BlockRequest {
+    data: String,
+}
+
 // Get /chain: Returns current chain
 async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
@@ -32,6 +37,18 @@ async fn post_block<C: Consensus>(
     }
 }
 
+async fn generate_block<C: Consensus>(
+    data: web::Data<Mutex<Chain<C>>>,
+    req: web::Json<BlockRequest>,
+) -> impl Responder {
+    let mut chain = data.lock().unwrap();
+    let timestamp = chrono::Utc::now().timestamp();
+
+    let block = chain.new_block(req.data.clone(), timestamp);
+
+    HttpResponse::Ok().json(block)
+}
+
 // Start server with given chain and address
 pub async fn run_server<C: Consensus>(chain: Chain<C>, address: &str) -> std::io::Result<()>
 where
@@ -43,6 +60,7 @@ where
             .app_data(chain_data.clone())
             .route("/chain", web::get().to(get_chain::<C>))
             .route("/block", web::post().to(post_block::<C>))
+            .route("/generate", web::post().to(generate_block::<C>))
     })
     .bind(address)?
     .run()
