@@ -1,12 +1,13 @@
 use super::{Block, Consensus};
 use chrono::Utc;
+use serde::de::DeserializeOwned;
 use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct Chain<C: Consensus> {
     pub chain: Vec<Block<C::Proof>>,
     pub nodes: HashSet<String>,
-    consensus: C,
+    pub consensus: C,
 }
 
 impl<C: Consensus> Chain<C> {
@@ -32,16 +33,16 @@ impl<C: Consensus> Chain<C> {
         blockchain
     }
 
-    pub fn new_block(&mut self, data: String, timestamp: i64) -> &Block<C::Proof> {
+    pub fn new_block(&mut self, data: String, timestamp: i64) -> Block<C::Proof> {
         let prev_block = self.chain.last().unwrap();
         let prev_hash = prev_block.hash.clone();
 
         let proof = self.consensus.prove(self, &data);
 
         let block = Block::new(self.chain.len() as u64, data, timestamp, proof, prev_hash);
-        self.chain.push(block);
+        self.chain.push(block.clone());
 
-        self.chain.last().unwrap()
+        block
     }
 
     pub fn register_node(&mut self, address: String) {
