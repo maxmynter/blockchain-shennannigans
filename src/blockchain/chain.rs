@@ -56,8 +56,8 @@ where
         block
     }
 
-    pub fn register_node(&mut self, address: String) {
-        self.nodes.insert(address);
+    pub fn register_node(&mut self, address: &String) {
+        self.nodes.insert(address.clone());
     }
     pub fn unregister_node(&mut self, address: &String) {
         self.nodes.remove(address);

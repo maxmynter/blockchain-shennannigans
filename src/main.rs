@@ -11,10 +11,10 @@ async fn main() -> std::io::Result<()> {
         let port = port.parse::<u16>().expect("Invalid port number");
         let mut chain = Chain::new(ProofOfWork::new(4));
         if port != 8080 {
-            chain.register_node(format!("http://127.0.0.1:8080"));
+            chain.register_node(&format!("http://127.0.0.1:8080"));
         }
         if port != 8081 {
-            chain.register_node(format!("http://127.0.0.1:8081"));
+            chain.register_node(&format!("http://127.0.0.1:8081"));
         }
         println!("Starting node on port {}", port);
 

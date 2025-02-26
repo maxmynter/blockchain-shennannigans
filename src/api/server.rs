@@ -14,6 +14,11 @@ struct BlockRequest {
     data: String,
 }
 
+#[derive(Deserialize)]
+struct NodeRequest {
+    address: String,
+}
+
 // Get /chain: Returns current chain
 async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
@@ -53,6 +58,15 @@ where
     HttpResponse::Ok().json(block)
 }
 
+async fn register_node<C: Consensus>(
+    data: web::Data<Mutex<Chain<C>>>,
+    req: web::Json<NodeRequest>,
+) -> impl Responder {
+    let mut chain = data.lock().unwrap();
+    chain.register_node(&req.address);
+    HttpResponse::Ok().body(format!("Node {} registered", req.address))
+}
+
 // Start server with given chain and address
 pub async fn run_server<C: Consensus>(chain: Chain<C>, address: &str) -> std::io::Result<()>
 where
@@ -65,6 +79,7 @@ where
             .route("/chain", web::get().to(get_chain::<C>))
             .route("/block", web::post().to(post_block::<C>))
             .route("/generate", web::post().to(generate_block::<C>))
+            .route("/nodes/register", web::post().to(register_node::<C>))
     })
     .bind(address)?
     .run()
