@@ -1,6 +1,6 @@
 use super::{Block, Chain};
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub trait Consensus: Sized + Clone + Send + Sync + 'static {
     type Proof: Clone + Serialize + DeserializeOwned;
@@ -8,7 +8,7 @@ pub trait Consensus: Sized + Clone + Send + Sync + 'static {
     fn validate(&self, chain: &Chain<Self>, block: &Block<Self::Proof>) -> bool;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProofOfWork {
     difficulty: usize,
 }

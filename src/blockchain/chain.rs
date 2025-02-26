@@ -1,16 +1,20 @@
 use super::{Block, Consensus};
 use chrono::Utc;
-use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fs::File;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Chain<C: Consensus> {
     pub chain: Vec<Block<C::Proof>>,
     pub nodes: HashSet<String>,
     pub consensus: C,
 }
 
-impl<C: Consensus> Chain<C> {
+impl<C: Consensus + Serialize + for<'de> Deserialize<'de>> Chain<C>
+where
+    C::Proof: Serialize + for<'de> Deserialize<'de>,
+{
     pub fn new(consensus: C) -> Self {
         let mut blockchain = Chain {
             chain: Vec::new(),
@@ -55,10 +59,32 @@ impl<C: Consensus> Chain<C> {
         for i in 1..self.chain.len() {
             let prev = &self.chain[i - 1];
             let curr = &self.chain[i];
-            if curr.previous_hash != prev.hash || self.consensus.validate(self, curr) {
+            if curr.previous_hash != prev.hash || !self.consensus.validate(self, curr) {
                 return false;
             }
         }
         return true;
+    }
+
+    pub fn save_to_file(&self, path: &str) -> std::io::Result<()> {
+        let file = File::create(path)?;
+        serde_json::to_writer(file, self)?;
+        Ok(())
+    }
+
+    pub fn load_from_file(path: &str) -> std::io::Result<Self> {
+        let mut file = File::open(path)?;
+        let chain: Chain<C> = serde_json::from_reader(file)?;
+        Ok(chain)
+    }
+
+    pub fn load_or_creat(path: &str, consensus: C) -> Self {
+        match File::open(path) {
+            Ok(file) => match serde_json::from_reader(file) {
+                Ok(chain) => chain,
+                Err(_) => Self::new(consensus),
+            },
+            Err(_) => Self::new(consensus),
+        }
     }
 }
