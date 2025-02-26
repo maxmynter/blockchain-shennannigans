@@ -2,7 +2,9 @@ use super::{Block, Chain};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-pub trait Consensus: Sized + Clone + Send + Sync + 'static {
+pub trait Consensus:
+    Sized + Clone + Send + Sync + 'static + Serialize + for<'a> Deserialize<'a>
+{
     type Proof: Clone + Serialize + DeserializeOwned;
     fn prove(&self, chain: &Chain<Self>, data: &str) -> Self::Proof;
     fn validate(&self, chain: &Chain<Self>, block: &Block<Self::Proof>) -> bool;

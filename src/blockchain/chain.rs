@@ -5,15 +5,22 @@ use std::collections::HashSet;
 use std::fs::File;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Chain<C: Consensus> {
+#[serde(bound(deserialize = "C: Consensus"))]
+pub struct Chain<C>
+where
+    C: Consensus,
+    C::Proof: Serialize + for<'b> Deserialize<'b>,
+{
     pub chain: Vec<Block<C::Proof>>,
     pub nodes: HashSet<String>,
+
     pub consensus: C,
 }
 
-impl<C: Consensus + Serialize + for<'de> Deserialize<'de>> Chain<C>
+impl<C> Chain<C>
 where
-    C::Proof: Serialize + for<'de> Deserialize<'de>,
+    C: Consensus,
+    C::Proof: Serialize + for<'b> Deserialize<'b>,
 {
     pub fn new(consensus: C) -> Self {
         let mut blockchain = Chain {
@@ -73,7 +80,7 @@ where
     }
 
     pub fn load_from_file(path: &str) -> std::io::Result<Self> {
-        let mut file = File::open(path)?;
+        let file = File::open(path)?;
         let chain: Chain<C> = serde_json::from_reader(file)?;
         Ok(chain)
     }

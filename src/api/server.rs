@@ -40,7 +40,11 @@ async fn post_block<C: Consensus>(
 async fn generate_block<C: Consensus>(
     data: web::Data<Mutex<Chain<C>>>,
     req: web::Json<BlockRequest>,
-) -> impl Responder {
+) -> impl Responder
+where
+    C::Proof: Serialize,
+    Block<C::Proof>: Serialize,
+{
     let mut chain = data.lock().unwrap();
     let timestamp = chrono::Utc::now().timestamp();
 
