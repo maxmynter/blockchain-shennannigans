@@ -44,27 +44,26 @@ pub async fn sync_chain<C: Consensus>(chain: &mut Chain<C>) -> Result<(), reqwes
 pub async fn broadcast_node_registration<C: Consensus>(
     chain: &Chain<C>,
     new_node_address: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Vec<String>, reqwest::Error> {
     let client = Client::new();
-    let mut failures = Vec::new();
+    let mut successful_broadcasts = Vec::new();
 
     for node in &chain.nodes {
         if node == new_node_address {
             continue;
         }
-        let result = client
+
+        match client
             .post(&format!("{}/nodes/register", node))
             .json(&serde_json::json!({"address": new_node_address}))
             .send()
-            .await;
-        if let Err(e) = result {
-            failures.push((node.clone(), e.to_string()));
+            .await
+        {
+            Ok(_) => successful_broadcasts.push(node.clone()),
+            Err(e) => {
+                println!("Failed to register with node {}:{}", node, e);
+            }
         }
     }
-
-    if !failures.is_empty() {
-        return Err(format!("Failed to register with nodes {:?}", failures).into());
-    }
-
-    Ok(())
+    Ok(successful_broadcasts)
 }

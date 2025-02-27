@@ -1,3 +1,4 @@
+use crate::api::client;
 use crate::blockchain::{Block, Chain, Consensus};
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
@@ -10,17 +11,17 @@ struct ChainWrapper<P> {
 }
 
 #[derive(Deserialize)]
-struct BlockRequest {
+pub struct BlockRequest {
     data: String,
 }
 
 #[derive(Deserialize)]
-struct NodeRequest {
+pub struct NodeRequest {
     address: String,
 }
 
 // Get /chain: Returns current chain
-async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
     let wrapper = ChainWrapper {
         chain: chain.chain.clone(),
@@ -29,7 +30,7 @@ async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Respo
 }
 
 // Post /block : Receives a new block and validates it
-async fn post_block<C: Consensus>(
+pub async fn post_block<C: Consensus>(
     data: web::Data<Mutex<Chain<C>>>,
     block: web::Json<Block<C::Proof>>,
 ) -> impl Responder {
@@ -42,7 +43,7 @@ async fn post_block<C: Consensus>(
     }
 }
 
-async fn generate_block<C: Consensus>(
+pub async fn generate_block<C: Consensus>(
     data: web::Data<Mutex<Chain<C>>>,
     req: web::Json<BlockRequest>,
 ) -> impl Responder
@@ -58,12 +59,19 @@ where
     HttpResponse::Ok().json(block)
 }
 
-async fn register_node<C: Consensus>(
+pub async fn register_node<C: Consensus>(
     data: web::Data<Mutex<Chain<C>>>,
     req: web::Json<NodeRequest>,
 ) -> impl Responder {
-    let mut chain = data.lock().unwrap();
-    chain.register_node(&req.address);
+    let new_address = req.address.clone();
+    {
+        let mut chain = data.lock().unwrap();
+        chain.register_node(&new_address);
+    }
+    // Clone chain to release mutex and allow concurrency
+    let chain_clone = data.lock().unwrap().clone();
+    client::broadcast_node_registration(&chain_clone, &new_address);
+
     HttpResponse::Ok().body(format!("Node {} registered", req.address))
 }
 
@@ -73,15 +81,8 @@ where
     C::Proof: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     let chain_data = web::Data::new(Mutex::new(chain));
-    HttpServer::new(move || {
-        App::new()
-            .app_data(chain_data.clone())
-            .route("/chain", web::get().to(get_chain::<C>))
-            .route("/block", web::post().to(post_block::<C>))
-            .route("/generate", web::post().to(generate_block::<C>))
-            .route("/nodes/register", web::post().to(register_node::<C>))
-    })
-    .bind(address)?
-    .run()
-    .await
+    HttpServer::new(move || App::new().app_data(chain_data.clone()))
+        .bind(address)?
+        .run()
+        .await
 }
