@@ -3,6 +3,7 @@ use crate::blockchain::{Block, Chain, Consensus};
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Mutex;
 
 #[derive(Serialize, Deserialize)]
@@ -18,6 +19,11 @@ pub struct BlockRequest {
 #[derive(Deserialize)]
 pub struct NodeRequest {
     address: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RegisteredNodes {
+    nodes: HashSet<String>,
 }
 
 // Get /chain: Returns current chain
@@ -73,6 +79,15 @@ pub async fn register_node<C: Consensus>(
     client::broadcast_node_registration(&chain_clone, &new_address);
 
     HttpResponse::Ok().body(format!("Node {} registered", req.address))
+}
+
+pub async fn get_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+    let chain = data.lock().unwrap();
+    let registered_nodes = RegisteredNodes {
+        nodes: chain.nodes.clone(),
+    };
+
+    HttpResponse::Ok().json(registered_nodes)
 }
 
 // Start server with given chain and address

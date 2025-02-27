@@ -4,7 +4,7 @@ mod frontend;
 mod utils;
 
 use actix_web::{web, App, HttpServer};
-use api::server::{generate_block, get_chain, post_block, register_node};
+use api::server::{generate_block, get_chain, get_nodes, post_block, register_node};
 use blockchain::{Chain, ProofOfWork};
 use frontend::routes::{render_blockchain, submit_message};
 use std::sync::Mutex;
@@ -31,6 +31,7 @@ async fn main() -> std::io::Result<()> {
                 .route("/chain", web::get().to(get_chain::<ProofOfWork>))
                 .route("/block", web::post().to(post_block::<ProofOfWork>))
                 .route("/generate", web::post().to(generate_block::<ProofOfWork>))
+                .route("/nodes", web::get().to(get_nodes::<ProofOfWork>))
                 .route(
                     "/nodes/register",
                     web::post().to(register_node::<ProofOfWork>),
