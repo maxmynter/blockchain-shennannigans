@@ -1,13 +1,14 @@
 use crate::blockchain::{Block, Chain, Consensus};
 use actix_web::{web, HttpResponse, Responder};
 use askama::Template;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 #[derive(Template)]
 #[template(path = "views/blockchain.html")]
 struct BlockchainTemplate<'a, P: std::fmt::Display> {
     blocks: &'a Vec<Block<P>>,
+    nodes: &'a HashSet<String>,
 }
 
 #[derive(Template)]
@@ -31,11 +32,18 @@ struct SyncResultTemplate {
     blocks_added: usize,
 }
 
+#[derive(Template)]
+#[template(path = "responses/all_nodes.html")]
+struct AllNodesTemplate {
+    nodes: Vec<String>,
+}
+
 pub async fn render_blockchain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
 
     let template = BlockchainTemplate {
         blocks: &chain.chain,
+        nodes: &chain.nodes,
     };
 
     match template.render() {
@@ -58,6 +66,16 @@ pub async fn submit_message<C: Consensus>(
 
     let template = BlockTemplate { block: &block };
 
+    match template.render() {
+        Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+pub async fn render_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+    let chain = data.lock().unwrap();
+    let nodes: Vec<String> = chain.nodes.clone().into_iter().collect();
+
+    let template = AllNodesTemplate { nodes };
     match template.render() {
         Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),

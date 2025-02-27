@@ -83,9 +83,8 @@ pub async fn register_node<C: Consensus>(
 
 pub async fn get_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
-    let registered_nodes = RegisteredNodes {
-        nodes: chain.nodes.clone(),
-    };
+    let nodes = chain.nodes.clone();
+    let registered_nodes = RegisteredNodes { nodes };
 
     HttpResponse::Ok().json(registered_nodes)
 }
