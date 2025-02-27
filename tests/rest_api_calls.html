@@ -1,0 +1,47 @@
+### Get the chain
+GET http://127.0.0.1:8080/chain
+
+### Post an invalid block
+POST http://127.0.0.1:8080/block
+Content-Type: application/json
+
+{
+"index": 1,
+"timestamp": 1645754040,
+"data": "Test Block",
+"previous_hash": "0",
+"hash": "",
+"proof": 42
+}
+
+### Generate a valid block
+POST http://127.0.0.1:8080/generate
+Content-Type: application/json
+
+{
+"data": "Test Block"
+}
+
+### Post a generated valid block
+POST http://127.0.0.1:8080/block
+Content-Type: application/json
+
+{"index":1,"timestamp":1740526236,
+"data":"Test Block",
+"previous_hash":"c3f3f9d4ab38c66a5da5b0885daddb47d065c2c17ac7c3fc1101d625e0832049","hash":"00007d6833c2293ed5082560ddf256611dd827155b8e9c26885b5d7264d69004","proof":55784}
+
+### Get chain from another port (possibly another node)
+GET http://127.0.0.1:8081/chain
+
+### Post block to another port
+POST http://127.0.0.1:8081/block
+Content-Type: application/json
+
+{
+"index": 1,
+"timestamp": 1645754040,
+"data": "Test Block",
+"previous_hash": "0",
+"hash": "",
+"proof": 42
+}
