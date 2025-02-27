@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Rustchain Viewer</title>
+	<script src="https://unpkg.com/htmx.org@1.9.2"></script>
+	<style>
+		.block {
+			border: 1px solid #ccc;
+			margin: 10px;
+			padding: 10px
+		}
+
+		.hash {
+			font-family: monospace;
+		}
+	</style>
+</head>
+
+<body>
+	<h1>Rustchain Viewer</h1>
+	<form hx-post="/message" hx-target="#blocks" hx-swap="afterbegin" name="message"
+		placeholder="Enter a message to write to Rustchain">
+		<button type="submit">
+			Send
+		</button>
+	</form>
+	<div id="blocks">
+		{% for block in blocks %}
+		{% include "block.html" %}
+		{% endfor %}
+	</div>
+</body>
+
+</html>
