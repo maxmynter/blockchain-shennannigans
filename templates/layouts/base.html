@@ -1,0 +1,50 @@
+<!Doctype html>
+<html>
+
+<head>
+	<title>{% block title %}Rustchain Viewer{% endblock %}</title>
+	<script src="https://unpkg.com/htmx.org@1.9.2"></script>
+	<style>
+		.block {
+			border: 1px solid #ccc;
+			margin: 10px;
+			padding: 10px;
+		}
+
+		.hash {
+			font-family: monospace;
+		}
+
+		.error {
+			color: red;
+			margin: 10px 0;
+		}
+
+		.success {
+			color: green;
+			margin: 10px 0;
+		}
+
+		.container {
+			margin-bottom: 20px;
+			padding: 15px;
+			border: 10px solid #eee;
+			border-radius: 5px;
+		}
+
+			{
+			% block additional_styles %
+		}
+
+			{
+			% endblock %
+		}
+	</style>
+</head>
+
+<body>
+	<h1>Rustchain Viewer</h1>
+	{% block content %}{% endblock %}
+</body>
+
+</html>

@@ -5,15 +5,30 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 #[derive(Template)]
-#[template(path = "blockchain.html")]
-struct BlockchainTemplate<'a, P> {
+#[template(path = "views/blockchain.html")]
+struct BlockchainTemplate<'a, P: std::fmt::Display> {
     blocks: &'a Vec<Block<P>>,
 }
 
 #[derive(Template)]
-#[template(path = "block.html")]
-struct BlockTemplate<'a, P> {
+#[template(path = "components/block.html")]
+struct BlockTemplate<'a, P: std::fmt::Display> {
     block: &'a Block<P>,
+}
+
+#[derive(Template)]
+#[template(path = "responses/node_result.html")]
+struct NodeResultTemplate {
+    success: bool,
+    message: String,
+}
+
+#[derive(Template)]
+#[template(path = "responses/sync_result.html")]
+struct SyncResultTemplate {
+    success: bool,
+    message: String,
+    blocks_added: usize,
 }
 
 pub async fn render_blockchain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {

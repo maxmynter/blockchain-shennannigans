@@ -1,0 +1,20 @@
+{% extends "layouts/base.html" %}
+{% block content %}
+
+<!-- Message Form -->
+{% include "components/message_form.html" %}
+
+<!-- Node Registration Form -->
+{% include "components/node_form.html" %}
+
+<!-- Sync chain button -->
+{% include "components/sync_button.html" %}
+
+<!-- Blocks display -->
+<h2>Blockchain</h2>
+<div id="blocks">
+	{% for block in blocks %}
+	{% include "components/block.html" %}
+	{% endfor %}
+</div>
+{% endblock %}

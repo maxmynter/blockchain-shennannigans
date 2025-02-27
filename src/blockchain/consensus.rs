@@ -1,11 +1,13 @@
 use super::{Block, Chain};
+use core::fmt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Display};
 
 pub trait Consensus:
     Sized + Clone + Send + Sync + 'static + Serialize + for<'a> Deserialize<'a>
 {
-    type Proof: Clone + Serialize + DeserializeOwned;
+    type Proof: Clone + Serialize + DeserializeOwned + Display;
     fn prove(&self, chain: &Chain<Self>, data: &str) -> Self::Proof;
     fn validate(&self, chain: &Chain<Self>, block: &Block<Self::Proof>) -> bool;
 }
@@ -18,6 +20,16 @@ pub struct ProofOfWork {
 impl ProofOfWork {
     pub fn new(difficulty: usize) -> Self {
         ProofOfWork { difficulty }
+    }
+}
+
+impl fmt::Display for ProofOfWork {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Difficulty (leading zeros in hash) = {}",
+            self.difficulty
+        )
     }
 }
 
