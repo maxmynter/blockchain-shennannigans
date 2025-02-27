@@ -123,3 +123,15 @@ pub async fn register_node_form<C: Consensus>(
         }
     }
 }
+
+pub async fn get_nodes_list<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+    let chain = data.lock().unwrap();
+    let nodes = chain.nodes.clone().into_iter().collect();
+
+    let template = AllNodesTemplate { nodes };
+
+    match template.render() {
+        Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}

@@ -6,7 +6,9 @@ mod utils;
 use actix_web::{web, App, HttpServer};
 use api::server::{generate_block, get_chain, get_nodes, post_block, register_node};
 use blockchain::{Chain, ProofOfWork};
-use frontend::routes::{register_node_form, render_blockchain, render_nodes, submit_message};
+use frontend::routes::{
+    get_nodes_list, register_node_form, render_blockchain, render_nodes, submit_message,
+};
 use std::sync::Mutex;
 
 fn configure_api_routes(cfg: &mut web::ServiceConfig) {
@@ -27,6 +29,10 @@ fn configure_frontend_routes(cfg: &mut web::ServiceConfig) {
         .route(
             "/web/nodes/register",
             web::post().to(register_node_form::<ProofOfWork>),
+        )
+        .route(
+            "/web/nodes/list",
+            web::get().to(get_nodes_list::<ProofOfWork>),
         );
 }
 
