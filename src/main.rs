@@ -6,7 +6,7 @@ mod utils;
 use actix_web::{web, App, HttpServer};
 use api::server::{generate_block, get_chain, get_nodes, post_block, register_node};
 use blockchain::{Chain, ProofOfWork};
-use frontend::routes::{render_blockchain, render_nodes, submit_message};
+use frontend::routes::{register_node_form, render_blockchain, render_nodes, submit_message};
 use std::sync::Mutex;
 
 fn configure_api_routes(cfg: &mut web::ServiceConfig) {
@@ -23,7 +23,11 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
 fn configure_frontend_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/", web::get().to(render_blockchain::<ProofOfWork>))
         .route("/message", web::post().to(submit_message::<ProofOfWork>))
-        .route("/web/nodes", web::get().to(render_nodes::<ProofOfWork>));
+        .route("/web/nodes", web::get().to(render_nodes::<ProofOfWork>))
+        .route(
+            "/web/nodes/register",
+            web::post().to(register_node_form::<ProofOfWork>),
+        );
 }
 
 #[tokio::main]

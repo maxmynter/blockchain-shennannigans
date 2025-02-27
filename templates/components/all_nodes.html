@@ -1,4 +1,4 @@
-<div class="container">
+<div class="container" id="nodes-list" hx-get="/web/nodes/list" hx-trigger="refreshNodes from:body">
 	<h2>Nodes</h2>
 	{% for node in nodes %}
 	<p>{{ node }}</p>

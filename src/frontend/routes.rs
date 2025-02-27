@@ -1,7 +1,9 @@
+use crate::api::client;
 use crate::blockchain::{Block, Chain, Consensus};
 use actix_web::{web, HttpResponse, Responder};
 use askama::Template;
 use std::collections::{HashMap, HashSet};
+use std::fmt::format;
 use std::sync::Mutex;
 
 #[derive(Template)]
@@ -79,5 +81,45 @@ pub async fn render_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> imp
     match template.render() {
         Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+
+pub async fn register_node_form<C: Consensus>(
+    data: web::Data<Mutex<Chain<C>>>,
+    form: web::Form<HashMap<String, String>>,
+) -> impl Responder {
+    let address = form.get("address").cloned().unwrap_or_default();
+
+    if address.is_empty() {
+        let template = NodeResultTemplate {
+            success: false,
+            message: "Node address cannot be empty".to_string(),
+        };
+
+        match template.render() {
+            Ok(html) => HttpResponse::BadRequest()
+                .content_type("text/html")
+                .body(html),
+            Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        }
+    } else {
+        {
+            let mut chain = data.lock().unwrap();
+            chain.register_node(&address);
+        }
+        let chain_clone = data.lock().unwrap().clone();
+        client::broadcast_node_registration(&chain_clone, &address);
+
+        let template = NodeResultTemplate {
+            success: true,
+            message: format!("Node {} registered successfully", address),
+        };
+
+        match template.render() {
+            Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
+            Err(err) => HttpResponse::InternalServerError()
+                .content_type("text/html")
+                .body(err.to_string()),
+        }
     }
 }
