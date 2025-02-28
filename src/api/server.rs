@@ -1,5 +1,8 @@
 use crate::api::client;
-use crate::blockchain::{Block, Chain, Consensus};
+use crate::blockchain::{Block, Chain, Consensus, ProofOfWork};
+use crate::frontend::routes::{
+    get_nodes_list, register_node_form, render_blockchain, render_nodes, submit_message,
+};
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -99,14 +102,47 @@ pub async fn get_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl R
     HttpResponse::Ok().json(registered_nodes)
 }
 
+fn configure_api_routes(cfg: &mut web::ServiceConfig) {
+    cfg.route("/chain", web::get().to(get_chain::<ProofOfWork>))
+        .route("/block", web::post().to(post_block::<ProofOfWork>))
+        .route("/generate", web::post().to(generate_block::<ProofOfWork>))
+        .route("/nodes", web::get().to(get_nodes::<ProofOfWork>))
+        .route(
+            "/nodes/register",
+            web::post().to(register_node::<ProofOfWork>),
+        )
+        .route("/alive", web::get().to(alive));
+}
+
+fn configure_frontend_routes(cfg: &mut web::ServiceConfig) {
+    cfg.route("/", web::get().to(render_blockchain::<ProofOfWork>))
+        .route("/message", web::post().to(submit_message::<ProofOfWork>))
+        .route("/web/nodes", web::get().to(render_nodes::<ProofOfWork>))
+        .route(
+            "/web/nodes/register",
+            web::post().to(register_node_form::<ProofOfWork>),
+        )
+        .route(
+            "/web/nodes/list",
+            web::get().to(get_nodes_list::<ProofOfWork>),
+        );
+}
+
 // Start server with given chain and address
 pub async fn run_server<C: Consensus>(chain: Chain<C>, address: &str) -> std::io::Result<()>
 where
     C::Proof: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     let chain_data = web::Data::new(Mutex::new(chain));
-    HttpServer::new(move || App::new().app_data(chain_data.clone()))
-        .bind(address)?
-        .run()
-        .await
+    print!("Starting rustchain node on port {}", address);
+
+    HttpServer::new(move || {
+        App::new()
+            .app_data(chain_data.clone())
+            .configure(configure_api_routes)
+            .configure(configure_frontend_routes)
+    })
+    .bind(address)?
+    .run()
+    .await
 }
