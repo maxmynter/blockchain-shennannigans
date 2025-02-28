@@ -9,7 +9,26 @@ pub trait Consensus:
 {
     type Proof: Clone + Serialize + DeserializeOwned + Display;
     fn prove(&self, chain: &Chain<Self>, data: &str) -> Self::Proof;
-    fn validate(&self, chain: &Chain<Self>, block: &Block<Self::Proof>) -> bool;
+    fn validate_block(
+        &self,
+        previous_block: &Block<Self::Proof>,
+        block: &Block<Self::Proof>,
+    ) -> bool;
+    fn validate_chain(&self, chain: &Chain<Self>) -> bool {
+        if chain.chain.is_empty() {
+            return true;
+        }
+        let genesis = &chain.chain[0];
+        if genesis.index != 0 || genesis.previous_hash != "0" {
+            return false;
+        }
+        for i in 1..chain.chain.len() {
+            if !self.validate_block(&chain.chain[i - 1], &chain.chain[i]) {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,7 +81,30 @@ impl Consensus for ProofOfWork {
         }
     }
 
-    fn validate(&self, _chain: &Chain<Self>, block: &Block<Self::Proof>) -> bool {
+    fn validate_block(
+        &self,
+        previous_block: &Block<Self::Proof>,
+        block: &Block<Self::Proof>,
+    ) -> bool {
+        if block.index != previous_block.index + 1 {
+            return false;
+        }
+
+        if block.previous_hash != previous_block.hash {
+            return false;
+        }
+
+        let calculated_hash = crate::utils::hash(
+            block.index,
+            block.timestamp,
+            &block.data,
+            &block.previous_hash,
+            &block.proof,
+        );
+        if block.hash != calculated_hash {
+            return false;
+        }
+
         let target = "0".repeat(self.difficulty);
         block.hash.starts_with(&target)
     }

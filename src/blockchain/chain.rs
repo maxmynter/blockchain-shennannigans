@@ -66,7 +66,7 @@ where
         for i in 1..self.chain.len() {
             let prev = &self.chain[i - 1];
             let curr = &self.chain[i];
-            if curr.previous_hash != prev.hash || !self.consensus.validate(self, curr) {
+            if curr.previous_hash != prev.hash || !self.consensus.validate_block(prev, curr) {
                 return false;
             }
         }
