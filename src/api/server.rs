@@ -26,6 +26,10 @@ pub struct RegisteredNodes {
     nodes: HashSet<String>,
 }
 
+pub async fn alive() -> impl Responder {
+    HttpResponse::Ok().body("Node alive")
+}
+
 // Get /chain: Returns current chain
 pub async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();

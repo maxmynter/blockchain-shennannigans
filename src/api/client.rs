@@ -67,3 +67,12 @@ pub async fn broadcast_node_registration<C: Consensus>(
     }
     Ok(successful_broadcasts)
 }
+
+pub async fn check_node_alive(address: &str) -> bool {
+    let client = Client::new();
+    let alive_url = format!("{}/alive", address);
+    match client.get(&alive_url).send().await {
+        Ok(response) => response.status().is_success(),
+        Err(_) => false,
+    }
+}

@@ -4,7 +4,7 @@ mod frontend;
 mod utils;
 
 use actix_web::{web, App, HttpServer};
-use api::server::{generate_block, get_chain, get_nodes, post_block, register_node};
+use api::server::{alive, generate_block, get_chain, get_nodes, post_block, register_node};
 use blockchain::{Chain, ProofOfWork};
 use frontend::routes::{
     get_nodes_list, register_node_form, render_blockchain, render_nodes, submit_message,
@@ -19,7 +19,8 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
         .route(
             "/nodes/register",
             web::post().to(register_node::<ProofOfWork>),
-        );
+        )
+        .route("/alive", web::get().to(alive));
 }
 
 fn configure_frontend_routes(cfg: &mut web::ServiceConfig) {
