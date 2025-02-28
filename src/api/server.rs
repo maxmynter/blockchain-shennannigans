@@ -77,9 +77,12 @@ pub async fn register_node<C: Consensus>(
     req: web::Json<NodeRequest>,
 ) -> impl Responder {
     let new_address = req.address.clone();
+    if !client::check_node_alive(&new_address).await {
+        return HttpResponse::BadRequest().body(format!("Node {} cannot be reached", new_address));
+    }
     {
         let mut chain = data.lock().unwrap();
-        chain.register_node(&new_address);
+        chain.add_node(&new_address);
     }
     // Clone chain to release mutex and allow concurrency
     let chain_clone = data.lock().unwrap().clone();

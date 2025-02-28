@@ -103,23 +103,34 @@ pub async fn register_node_form<C: Consensus>(
             Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         }
     } else {
-        {
-            let mut chain = data.lock().unwrap();
-            chain.register_node(&address);
-        }
-        let chain_clone = data.lock().unwrap().clone();
-        client::broadcast_node_registration(&chain_clone, &address);
+        if !client::check_node_alive(&address).await {
+            let template = NodeResultTemplate {
+                success: false,
+                message: format!("Node {} cannot be reached", address),
+            };
+            match template.render() {
+                Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
+                Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+            }
+        } else {
+            {
+                let mut chain = data.lock().unwrap();
+                chain.add_node(&address);
+            }
+            let chain_clone = data.lock().unwrap().clone();
+            client::broadcast_node_registration(&chain_clone, &address);
 
-        let template = NodeResultTemplate {
-            success: true,
-            message: format!("Node {} registered successfully", address),
-        };
+            let template = NodeResultTemplate {
+                success: true,
+                message: format!("Node {} registered successfully", address),
+            };
 
-        match template.render() {
-            Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
-            Err(err) => HttpResponse::InternalServerError()
-                .content_type("text/html")
-                .body(err.to_string()),
+            match template.render() {
+                Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
+                Err(err) => HttpResponse::InternalServerError()
+                    .content_type("text/html")
+                    .body(err.to_string()),
+            }
         }
     }
 }

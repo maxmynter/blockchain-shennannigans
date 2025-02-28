@@ -56,10 +56,10 @@ where
         block
     }
 
-    pub fn register_node(&mut self, address: &String) {
+    pub fn add_node(&mut self, address: &String) {
         self.nodes.insert(address.clone());
     }
-    pub fn unregister_node(&mut self, address: &String) {
+    pub fn remove_node(&mut self, address: &String) {
         self.nodes.remove(address);
     }
     pub fn is_valid(&self) -> bool {
