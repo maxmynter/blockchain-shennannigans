@@ -9,11 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-#[derive(Serialize, Deserialize)]
-struct ChainWrapper<P> {
-    chain: Vec<Block<P>>,
-}
-
 #[derive(Deserialize)]
 pub struct BlockRequest {
     data: String,
@@ -36,10 +31,7 @@ pub async fn alive() -> impl Responder {
 // Get /chain: Returns current chain
 pub async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
-    let wrapper = ChainWrapper {
-        chain: chain.chain.clone(),
-    };
-    HttpResponse::Ok().json(wrapper)
+    HttpResponse::Ok().json(chain.chain.clone())
 }
 
 // Post /block : Receives a new block and validates it
@@ -102,6 +94,47 @@ pub async fn get_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl R
     HttpResponse::Ok().json(registered_nodes)
 }
 
+async fn synchronize_chain<C: Consensus>(
+    chain_data: &web::Data<Mutex<Chain<C>>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let nodes = {
+        let chain = chain_data.lock().unwrap();
+        chain.nodes.clone()
+    };
+    if nodes.is_empty() {
+        return Ok(());
+    }
+    let mut max_len = 0;
+    let mut best_chain: Option<Vec<Block<C::Proof>>> = None;
+    for node in nodes {
+        match client::sync_chain::<C>(&node).await {
+            Ok(response) => {
+                let temp_chain = Chain {
+                    chain: response,
+                    nodes: Default::default(),
+                    consensus: chain_data.lock().unwrap().consensus.clone(),
+                };
+                if temp_chain.consensus.validate_chain(&temp_chain)
+                    && temp_chain.chain.len() > max_len
+                {
+                    max_len = temp_chain.chain.len();
+                    best_chain = Some(temp_chain.chain);
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+
+    if let Some(new_chain) = best_chain {
+        let mut chain = chain_data.lock().unwrap();
+        if new_chain.len() > chain.chain.len() {
+            chain.chain = new_chain;
+            println!("Chain updated. New length {}", max_len);
+        }
+    }
+    Ok(())
+}
+
 fn configure_api_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/chain", web::get().to(get_chain::<ProofOfWork>))
         .route("/block", web::post().to(post_block::<ProofOfWork>))
@@ -134,7 +167,18 @@ where
     C::Proof: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     let chain_data = web::Data::new(Mutex::new(chain));
-    print!("Starting rustchain node on port {}", address);
+    println!("Starting rustchain node on port {}", address);
+
+    let consensus_data = chain_data.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
+        loop {
+            interval.tick().await;
+            if let Err(e) = synchronize_chain(&consensus_data).await {
+                eprintln!("Error synchronizing chain: {}", e);
+            }
+        }
+    });
 
     HttpServer::new(move || {
         App::new()

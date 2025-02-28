@@ -1,4 +1,5 @@
-use reqwest::Client;
+use chrono::format::format;
+use reqwest::{Client, Error};
 use serde_json;
 
 use crate::blockchain::{Block, Chain, Consensus};
@@ -20,25 +21,20 @@ pub async fn broadcast_block<C: Consensus>(
 }
 
 // Sync chains with other nodes and adopt the longest valid chain
-pub async fn sync_chain<C: Consensus>(chain: &mut Chain<C>) -> Result<(), reqwest::Error> {
+pub async fn sync_chain<C: Consensus>(
+    node_address: &str,
+) -> Result<Vec<Block<C::Proof>>, reqwest::Error>
+where
+    C::Proof: serde::de::DeserializeOwned,
+{
     let client = Client::new();
-    for node in chain.nodes.clone() {
-        let response = client
-            .get(&format!("{}/chain", node))
-            .send()
-            .await?
-            .json::<Vec<Block<C::Proof>>>()
-            .await?;
-        let remote_chain = Chain {
-            chain: response,
-            nodes: chain.nodes.clone(),
-            consensus: chain.consensus.clone(),
-        };
-        if remote_chain.chain.len() > chain.chain.len() && remote_chain.is_valid() {
-            chain.chain = remote_chain.chain;
-        }
-    }
-    Ok(())
+
+    client
+        .get(&format!("{}/chain", node_address))
+        .send()
+        .await?
+        .json::<Vec<Block<C::Proof>>>()
+        .await
 }
 
 pub async fn broadcast_node_registration<C: Consensus>(
