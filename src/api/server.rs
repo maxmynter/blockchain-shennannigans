@@ -1,7 +1,7 @@
 use crate::api::client;
 use crate::blockchain::{Block, Chain, Consensus, ProofOfWork};
 use crate::frontend::routes::{
-    get_nodes_list, register_node_form, render_blockchain, render_nodes, submit_message,
+    get_blocks, get_nodes_list, register_node_form, render_blockchain, render_nodes, submit_message,
 };
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
@@ -158,7 +158,8 @@ fn configure_frontend_routes(cfg: &mut web::ServiceConfig) {
         .route(
             "/web/nodes/list",
             web::get().to(get_nodes_list::<ProofOfWork>),
-        );
+        )
+        .route("/web/blocks/list", web::get().to(get_blocks::<ProofOfWork>));
 }
 
 // Start server with given chain and address

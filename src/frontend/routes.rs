@@ -27,11 +27,9 @@ struct NodeResultTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "responses/sync_result.html")]
-struct SyncResultTemplate {
-    success: bool,
-    message: String,
-    blocks_added: usize,
+#[template(path = "components/display_chain.html")]
+struct DisplayChainTemplate<'a, P: std::fmt::Display> {
+    blocks: &'a Vec<Block<P>>,
 }
 
 #[derive(Template)]
@@ -48,6 +46,18 @@ pub async fn render_blockchain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -
         nodes: &chain.nodes,
     };
 
+    match template.render() {
+        Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+
+pub async fn get_blocks<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+    let chain = data.lock().unwrap();
+
+    let template = DisplayChainTemplate {
+        blocks: &chain.chain,
+    };
     match template.render() {
         Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
