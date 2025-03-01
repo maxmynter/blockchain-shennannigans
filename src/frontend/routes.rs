@@ -57,12 +57,18 @@ pub async fn render_dashboard<C: Consensus>(
     }
 }
 
-pub async fn render_blocks_list<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn render_blocks_list<C: Consensus>(
+    data: web::Data<Mutex<Chain<C>>>,
+    query: web::Query<HashMap<String, String>>,
+) -> impl Responder {
     let chain = data.lock().unwrap();
+    let order = query.get("oder").map(|s| s.as_str()).unwrap_or("desc");
+    let mut blocks = chain.chain.clone();
+    if order == "desc" {
+        blocks.reverse();
+    }
 
-    let template = BlocksListTemplate {
-        blocks: &chain.chain,
-    };
+    let template = BlocksListTemplate { blocks: &blocks };
     match template.render() {
         Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),

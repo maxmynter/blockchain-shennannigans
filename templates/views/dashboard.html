@@ -16,7 +16,7 @@
 
 {% block inspector %}
 <h2>Blockchain</h2>
-<div id="blocks" hx-get="/web/blocks/list" hx-trigger="every {{poll_interval_s}}s">
+<div id="blocks" hx-get="/web/blocks/list?order=asc" hx-trigger="every {{poll_interval_s}}s">
 {% include "components/display_chain.html" %}
 </div>
 {% endblock %}

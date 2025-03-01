@@ -1,3 +1,3 @@
 Dockerize application
 
-weird ordering of blocks on frontend (new one is on top but then it's increasing ... )
+Add ordering control button (and fix that the polling does not fuck it up)... 
