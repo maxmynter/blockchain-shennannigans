@@ -3,6 +3,7 @@ use crate::blockchain::{Block, Chain, Consensus, ProofOfWork};
 use crate::frontend::routes::{
     register_node_form, render_blocks_list, render_dashboard, render_nodes_list, submit_message,
 };
+use actix_web::rt::spawn;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -85,7 +86,10 @@ pub async fn register_node<C: Consensus>(
     }
     // Clone chain to release mutex and allow concurrency
     let chain_clone = data.lock().unwrap().clone();
-    client::broadcast_node_registration(&chain_clone, &new_address);
+    spawn(client::broadcast_node_registration(
+        chain_clone,
+        new_address,
+    ));
 
     HttpResponse::Ok().body(format!("Node {} registered", req.address))
 }

@@ -1,5 +1,6 @@
 use crate::api::{client, server};
 use crate::blockchain::{Block, Chain, Consensus};
+use actix_web::rt::spawn;
 use actix_web::{web, HttpResponse, Responder};
 use askama::Template;
 use std::collections::{HashMap, HashSet};
@@ -132,12 +133,13 @@ pub async fn register_node_form<C: Consensus>(
                 chain.add_node(&address);
             }
             let chain_clone = data.lock().unwrap().clone();
-            client::broadcast_node_registration(&chain_clone, &address);
 
             let template = NodeResultTemplate {
                 success: true,
                 message: format!("Node {} registered successfully", address),
             };
+
+            spawn(client::broadcast_node_registration(chain_clone, address));
 
             match template.render() {
                 Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),

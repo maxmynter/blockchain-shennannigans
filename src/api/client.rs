@@ -1,5 +1,4 @@
-use chrono::format::format;
-use reqwest::{Client, Error};
+use reqwest::Client;
 use serde_json;
 
 use crate::blockchain::{Block, Chain, Consensus};
@@ -38,13 +37,13 @@ where
 }
 
 pub async fn broadcast_node_registration<C: Consensus>(
-    chain: &Chain<C>,
-    new_node_address: &str,
+    chain: Chain<C>,
+    new_node_address: String,
 ) -> Result<Vec<String>, reqwest::Error> {
     let client = Client::new();
     let mut successful_broadcasts = Vec::new();
 
-    for node in &chain.nodes {
+    for node in chain.nodes {
         if node == new_node_address {
             continue;
         }
