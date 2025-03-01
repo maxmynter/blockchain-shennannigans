@@ -31,20 +31,13 @@
 			border: 10px solid #eee;
 			border-radius: 5px;
 		}
-
-			{
-			% block additional_styles %
-		}
-
-			{
-			% endblock %
-		}
 	</style>
 </head>
 
 <body>
 	<h1>Rustchain Viewer</h1>
-	{% block content %}{% endblock %}
+	{% block controls %}{% endblock %}
+	{% block inspector %}{% endblock %}
 </body>
 
 </html>

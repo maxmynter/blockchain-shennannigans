@@ -1,13 +1,17 @@
 use crate::api::client;
 use crate::blockchain::{Block, Chain, Consensus, ProofOfWork};
 use crate::frontend::routes::{
-    get_blocks, get_nodes_list, register_node_form, render_blockchain, render_nodes, submit_message,
+    get_blocks, get_nodes_list, register_node_form, render_full_page, render_nodes, submit_message,
 };
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Mutex;
+
+pub struct AppState {
+    pub poll_interval_s: u64,
+}
 
 #[derive(Deserialize)]
 pub struct BlockRequest {
@@ -148,7 +152,7 @@ fn configure_api_routes(cfg: &mut web::ServiceConfig) {
 }
 
 fn configure_frontend_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/", web::get().to(render_blockchain::<ProofOfWork>))
+    cfg.route("/", web::get().to(render_full_page::<ProofOfWork>))
         .route("/message", web::post().to(submit_message::<ProofOfWork>))
         .route("/web/nodes", web::get().to(render_nodes::<ProofOfWork>))
         .route(
@@ -181,9 +185,14 @@ where
         }
     });
 
+    let app_state = web::Data::new(AppState {
+        poll_interval_s: super::POLL_INTERVAL_S,
+    });
+
     HttpServer::new(move || {
         App::new()
             .app_data(chain_data.clone())
+            .app_data(app_state.clone())
             .configure(configure_api_routes)
             .configure(configure_frontend_routes)
     })

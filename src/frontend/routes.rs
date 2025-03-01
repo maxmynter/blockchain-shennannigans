@@ -1,4 +1,4 @@
-use crate::api::client;
+use crate::api::{client, server};
 use crate::blockchain::{Block, Chain, Consensus};
 use actix_web::{web, HttpResponse, Responder};
 use askama::Template;
@@ -7,10 +7,11 @@ use std::fmt::format;
 use std::sync::Mutex;
 
 #[derive(Template)]
-#[template(path = "views/blockchain.html")]
-struct BlockchainTemplate<'a, P: std::fmt::Display> {
+#[template(path = "views/full_page.html")]
+struct FullPageTemplate<'a, P: std::fmt::Display> {
     blocks: &'a Vec<Block<P>>,
     nodes: &'a HashSet<String>,
+    poll_interval_s: u64,
 }
 
 #[derive(Template)]
@@ -38,12 +39,16 @@ struct AllNodesTemplate {
     nodes: Vec<String>,
 }
 
-pub async fn render_blockchain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn render_full_page<C: Consensus>(
+    data: web::Data<Mutex<Chain<C>>>,
+    app_state: web::Data<server::AppState>,
+) -> impl Responder {
     let chain = data.lock().unwrap();
 
-    let template = BlockchainTemplate {
+    let template = FullPageTemplate {
         blocks: &chain.chain,
         nodes: &chain.nodes,
+        poll_interval_s: app_state.poll_interval_s,
     };
 
     match template.render() {
