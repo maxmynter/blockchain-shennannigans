@@ -3,12 +3,11 @@ use crate::blockchain::{Block, Chain, Consensus};
 use actix_web::{web, HttpResponse, Responder};
 use askama::Template;
 use std::collections::{HashMap, HashSet};
-use std::fmt::format;
 use std::sync::Mutex;
 
 #[derive(Template)]
-#[template(path = "views/full_page.html")]
-struct FullPageTemplate<'a, P: std::fmt::Display> {
+#[template(path = "views/dashboard.html")]
+struct DashboardTemplate<'a, P: std::fmt::Display> {
     blocks: &'a Vec<Block<P>>,
     nodes: &'a HashSet<String>,
     poll_interval_s: u64,
@@ -29,23 +28,23 @@ struct NodeResultTemplate {
 
 #[derive(Template)]
 #[template(path = "components/display_chain.html")]
-struct DisplayChainTemplate<'a, P: std::fmt::Display> {
+struct BlocksListTemplate<'a, P: std::fmt::Display> {
     blocks: &'a Vec<Block<P>>,
 }
 
 #[derive(Template)]
 #[template(path = "responses/all_nodes.html")]
-struct AllNodesTemplate {
+struct NodesListTemplate {
     nodes: Vec<String>,
 }
 
-pub async fn render_full_page<C: Consensus>(
+pub async fn render_dashboard<C: Consensus>(
     data: web::Data<Mutex<Chain<C>>>,
     app_state: web::Data<server::AppState>,
 ) -> impl Responder {
     let chain = data.lock().unwrap();
 
-    let template = FullPageTemplate {
+    let template = DashboardTemplate {
         blocks: &chain.chain,
         nodes: &chain.nodes,
         poll_interval_s: app_state.poll_interval_s,
@@ -57,10 +56,10 @@ pub async fn render_full_page<C: Consensus>(
     }
 }
 
-pub async fn get_blocks<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn render_blocks_list<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
 
-    let template = DisplayChainTemplate {
+    let template = BlocksListTemplate {
         blocks: &chain.chain,
     };
     match template.render() {
@@ -88,11 +87,11 @@ pub async fn submit_message<C: Consensus>(
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
 }
-pub async fn render_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn render_nodes_list<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
     let nodes: Vec<String> = chain.nodes.clone().into_iter().collect();
 
-    let template = AllNodesTemplate { nodes };
+    let template = NodesListTemplate { nodes };
     match template.render() {
         Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
@@ -147,17 +146,5 @@ pub async fn register_node_form<C: Consensus>(
                     .body(err.to_string()),
             }
         }
-    }
-}
-
-pub async fn get_nodes_list<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
-    let chain = data.lock().unwrap();
-    let nodes = chain.nodes.clone().into_iter().collect();
-
-    let template = AllNodesTemplate { nodes };
-
-    match template.render() {
-        Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
 }
