@@ -56,8 +56,8 @@ where
         block
     }
 
-    pub fn add_node(&mut self, address: &String) {
-        self.nodes.insert(address.clone());
+    pub fn add_node(&mut self, address: &str) {
+        self.nodes.insert(address.to_owned());
     }
     pub fn remove_node(&mut self, address: &String) {
         self.nodes.remove(address);
@@ -70,7 +70,7 @@ where
                 return false;
             }
         }
-        return true;
+        true
     }
 
     pub fn save_to_file(&self, path: &str) -> std::io::Result<()> {
@@ -85,7 +85,7 @@ where
         Ok(chain)
     }
 
-    pub fn load_or_creat(path: &str, consensus: C) -> Self {
+    pub fn load_or_create(path: &str, consensus: C) -> Self {
         match File::open(path) {
             Ok(file) => match serde_json::from_reader(file) {
                 Ok(chain) => chain,

@@ -25,10 +25,10 @@ async fn main() -> std::io::Result<()> {
 
         let mut chain = chain;
         if port != 8080 {
-            chain.add_node(&format!("http://127.0.0.1:8080"));
+            chain.add_node("http://127.0.0.1:8080");
         }
         if port != 8081 {
-            chain.add_node(&format!("http://127.0.0.1:8081"));
+            chain.add_node("http://127.0.0.1:8081");
         }
 
         println!(

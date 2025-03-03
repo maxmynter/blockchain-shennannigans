@@ -47,7 +47,7 @@ pub async fn post_block<C: Consensus>(
     let mut chain = data.lock().unwrap();
     if chain
         .consensus
-        .validate_block(&chain.chain.last().unwrap(), &block)
+        .validate_block(chain.chain.last().unwrap(), &block)
     {
         chain.chain.push(block.into_inner());
         HttpResponse::Ok().body("Block added")

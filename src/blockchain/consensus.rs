@@ -70,7 +70,7 @@ impl Consensus for ProofOfWork {
             let hash = crate::utils::hash(
                 chain.chain.len() as u64,
                 timestamp,
-                &data,
+                data,
                 &previous_hash,
                 &proof,
             );

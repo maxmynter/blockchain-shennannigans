@@ -11,7 +11,7 @@ pub async fn broadcast_block<C: Consensus>(
     let client = Client::new();
     for node in &chain.nodes {
         client
-            .post(&format!("{}/block", node))
+            .post(format!("{}/block", node))
             .json(block)
             .send()
             .await?;
@@ -29,7 +29,7 @@ where
     let client = Client::new();
 
     client
-        .get(&format!("{}/chain", node_address))
+        .get(format!("{}/chain", node_address))
         .send()
         .await?
         .json::<Vec<Block<C::Proof>>>()
@@ -49,7 +49,7 @@ pub async fn broadcast_node_registration<C: Consensus>(
         }
 
         match client
-            .post(&format!("{}/nodes/register", node))
+            .post(format!("{}/nodes/register", node))
             .json(&serde_json::json!({"address": new_node_address}))
             .send()
             .await
