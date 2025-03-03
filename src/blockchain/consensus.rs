@@ -7,7 +7,7 @@ use std::fmt::{Debug, Display};
 pub trait Consensus:
     Sized + Clone + Send + Sync + 'static + Serialize + for<'a> Deserialize<'a>
 {
-    type Proof: Clone + Serialize + DeserializeOwned + Display;
+    type Proof: Debug + Clone + Serialize + DeserializeOwned + Display;
     fn prove(&self, chain: &Chain<Self>, data: &str) -> Self::Proof;
     fn validate_block(
         &self,
