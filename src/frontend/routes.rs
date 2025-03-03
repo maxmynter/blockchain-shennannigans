@@ -44,12 +44,9 @@ pub async fn render_dashboard<C: Consensus>(
     app_state: web::Data<server::AppState>,
 ) -> impl Responder {
     let chain = data.lock().unwrap();
-    let mut reversed_blocks = chain.chain.clone();
-    reversed_blocks.reverse();
-    dbg!(&chain.chain.iter().rev());
 
     let template = DashboardTemplate {
-        blocks: &reversed_blocks,
+        blocks: &chain.chain,
         nodes: &chain.nodes,
         poll_interval_s: app_state.poll_interval_s,
     };
@@ -67,7 +64,7 @@ pub async fn render_blocks_list<C: Consensus>(
     let chain = data.lock().unwrap();
     let order = query.get("order").map(|s| s.as_str()).unwrap_or("desc");
     let mut blocks = chain.chain.clone();
-    if order == "desc" {
+    if order == "asc" {
         blocks.reverse();
     }
 
