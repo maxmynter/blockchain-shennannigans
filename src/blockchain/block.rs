@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +29,15 @@ impl<P: Clone + Serialize + DeserializeOwned> Block<P> {
             previous_hash,
             hash,
             proof,
+        }
+    }
+}
+
+impl<P> Block<P> {
+    pub fn formatted_timestamp(&self) -> String {
+        match DateTime::<Utc>::from_timestamp(self.timestamp, 0) {
+            Some(date) => date.to_string(),
+            None => "invalid timestamp".to_string(),
         }
     }
 }
