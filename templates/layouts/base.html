@@ -5,32 +5,16 @@
 	<title>{% block title %}Rustchain Viewer{% endblock %}</title>
 	<script src="https://unpkg.com/htmx.org@1.9.2"></script>
 	<style>
-		.block {
-			border: 1px solid #ccc;
-			margin: 10px;
-			padding: 10px;
+		:root {
+			--primary: #3366cc;
+		}
+		body {
+			font-family: Roboto;
+			max-width: 1200px;
+			margin: 0 auto;
 		}
 
-		.hash {
-			font-family: monospace;
-		}
-
-		.error {
-			color: red;
-			margin: 10px 0;
-		}
-
-		.success {
-			color: green;
-			margin: 10px 0;
-		}
-
-		.container {
-			margin-bottom: 20px;
-			padding: 15px;
-			border: 10px solid #eee;
-			border-radius: 5px;
-		}
+		{% include "styles/base_styles.css" %}
 	</style>
 </head>
 
