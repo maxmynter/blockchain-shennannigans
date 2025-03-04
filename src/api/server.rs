@@ -1,10 +1,10 @@
 use crate::api::client;
-use crate::blockchain::{Block, Chain, Consensus};
+use crate::blockchain::{Block, Chain, Consensus, Mempool};
 use crate::frontend::routes::{
     register_node_form, render_blocks_list, render_dashboard, render_nodes_list, submit_message,
 };
 use actix_web::rt::spawn;
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{body, web, App, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -27,6 +27,11 @@ pub struct NodeRequest {
 #[derive(Serialize, Deserialize)]
 pub struct RegisteredNodes {
     nodes: HashSet<String>,
+}
+
+#[derive(Deserialize)]
+pub struct MessageRequest {
+    message: String,
 }
 
 pub async fn alive() -> impl Responder {
@@ -121,6 +126,7 @@ async fn synchronize_chain<C: Consensus>(
                     chain: response,
                     nodes: Default::default(),
                     consensus: chain_data.lock().unwrap().consensus.clone(),
+                    mempool: Mempool::new(10, 100),
                 };
                 if temp_chain.consensus.validate_chain(&temp_chain)
                     && temp_chain.chain.len() > max_len
@@ -143,10 +149,42 @@ async fn synchronize_chain<C: Consensus>(
     Ok(())
 }
 
+pub async fn submit_to_mempool<C: Consensus>(
+    data: web::Data<Mutex<Chain<C>>>,
+    req: web::Json<MessageRequest>,
+) -> impl Responder {
+    let mut chain = data.lock().unwrap();
+    match chain.submit_message(req.message.clone()) {
+        Ok(transaction) => HttpResponse::Ok().json(transaction),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}
+
+pub async fn generate_block_from_mempool<C: Consensus>(
+    data: web::Data<Mutex<Chain<C>>>,
+) -> impl Responder
+where
+    C::Proof: Serialize,
+    Block<C::Proof>: Serialize,
+{
+    let mut chain = data.lock().unwrap();
+    let timestamp = chrono::Utc::now().timestamp();
+
+    match chain.new_block_from_mempool(timestamp, 10) {
+        Some(block) => HttpResponse::Ok().json(block),
+        None => HttpResponse::BadRequest().body("No pending messages in mempool"),
+    }
+}
+
 fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
     cfg.route("/chain", web::get().to(get_chain::<C>))
         .route("/block", web::post().to(post_block::<C>))
         .route("/generate", web::post().to(generate_block::<C>))
+        .route("/mempool/submit", web::post().to(submit_to_mempool::<C>))
+        .route(
+            "/mempool/generate",
+            web::post().to(generate_block_from_mempool::<C>),
+        )
         .route("/nodes", web::get().to(get_nodes::<C>))
         .route("/nodes/register", web::post().to(register_node::<C>))
         .route("/alive", web::get().to(alive));
