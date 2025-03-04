@@ -176,6 +176,21 @@ where
     }
 }
 
+pub async fn get_mempool_status<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+    let chain = data.lock().unwrap();
+
+    let pending_count = chain.mempool.pending_count();
+
+    #[derive(Serialize)]
+    struct MempoolStatus {
+        pending_transactions: usize,
+    }
+
+    HttpResponse::Ok().json(MempoolStatus {
+        pending_transactions: pending_count,
+    })
+}
+
 fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
     cfg.route("/chain", web::get().to(get_chain::<C>))
         .route("/block", web::post().to(post_block::<C>))
@@ -185,6 +200,7 @@ fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
             "/mempool/generate",
             web::post().to(generate_block_from_mempool::<C>),
         )
+        .route("/mempool/status", web::get().to(get_mempool_status::<C>))
         .route("/nodes", web::get().to(get_nodes::<C>))
         .route("/nodes/register", web::post().to(register_node::<C>))
         .route("/alive", web::get().to(alive));

@@ -1,0 +1,35 @@
+### Submit a message to mempool
+POST http://127.0.0.1:8080/mempool/submit
+Content-Type: application/json
+
+{
+"message": "This is a pending message for the mempool"
+}
+
+### Submit another message to mempool
+POST http://127.0.0.1:8080/mempool/submit
+Content-Type: application/json
+
+{
+"message": "This is another pending message for the mempool"
+}
+
+### Submit a third message to mempool
+POST http://127.0.0.1:8080/mempool/submit
+Content-Type: application/json
+
+{
+"message": "Yet another message waiting to be mined"
+}
+
+### Generate a block from mempool transactions
+POST http://127.0.0.1:8080/mempool/generate
+Content-Type: application/json
+
+{}
+
+### Get mempool status
+GET http://127.0.0.1:8080/mempool/status
+
+### Check the chain to see if the mempool messages were added
+GET http://127.0.0.1:8080/chain
