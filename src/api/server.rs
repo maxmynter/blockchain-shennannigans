@@ -1,5 +1,5 @@
 use crate::api::client;
-use crate::blockchain::{Block, Chain, Consensus, Mempool};
+use crate::blockchain::{Block, Chain, Consensus, Mempool, MessageTransaction};
 use crate::frontend::routes::{
     register_node_form, render_blocks_list, render_dashboard, render_nodes_list, submit_message,
 };
@@ -54,6 +54,11 @@ pub async fn post_block<C: Consensus>(
         .consensus
         .validate_block(chain.chain.last().unwrap(), &block)
     {
+        if let Ok(transaction) = serde_json::from_str::<Vec<MessageTransaction>>(&block.data) {
+            let transaction_ids: Vec<String> =
+                transactions.iter().map(|tx| tx.id.clone()).collect();
+            chain.mempool.remove_messages(&transaction_ids);
+        }
         chain.chain.push(block.into_inner());
         HttpResponse::Ok().body("Block added")
     } else {
