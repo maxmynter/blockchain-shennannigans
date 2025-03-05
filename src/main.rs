@@ -5,41 +5,46 @@ mod utils;
 
 use api::server::run_server;
 use blockchain::{Chain, ProofOfWork};
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about=None)]
+struct Args {
+    #[arg(short, long)]
+    port: u16,
+
+    #[arg(short = 'f', long)]
+    chain_file: Option<String>,
+
+    #[arg(short, long, default_value = "pow")]
+    consensus: String,
+
+    #[arg(short, long, default_value_t = 4)]
+    difficulty: u64,
+}
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let consensus_type = "pow"; // TODO: later read that in from .env ...
+    let args = Args::parse();
 
-    if let Some(port) = std::env::args().nth(1) {
-        let port = port.parse::<u16>().expect("Invalid Port Number");
-        let chain = match consensus_type {
-            "pow" => {
-                let difficulty = 4;
-                Chain::new(ProofOfWork::new(difficulty))
-            }
-            "pos" => {
-                unimplemented!("Proof of stake not implemented")
-            }
-            _ => panic!("Unsupported consensus type {}", consensus_type),
-        };
+    let chain_file = args
+        .chain_file
+        .unwrap_or_else(|| format!("chain_{}.json", args.port));
 
-        let mut chain = chain;
-        if port != 8080 {
-            chain.add_node("http://127.0.0.1:8080");
+    let chain = match args.consensus.as_str() {
+        "pow" => Chain::load_or_create(&chain_file, ProofOfWork::new(args.difficulty as usize)),
+        "pos" => {
+            unimplemented!("Proof of Stake not implemented.")
         }
-        if port != 8081 {
-            chain.add_node("http://127.0.0.1:8081");
-        }
+        _ => panic!("Unsupported Consensus type {}", args.consensus),
+    };
 
-        println!(
-            "Starting node on port {} with consensus {}",
-            port, consensus_type
-        );
+    println!(
+        "Starting node on port {} with consensus {} (chain file: {})",
+        args.port, args.consensus, chain_file
+    );
+    let chain = chain;
 
-        let address = format!("127.0.0.1:{}", port);
-        run_server(chain, &address).await
-    } else {
-        println!("Please provide port number");
-        Ok(())
-    }
+    let address = format!("127.0.0.1:{}", args.port);
+    run_server(chain, &address, chain_file).await
 }

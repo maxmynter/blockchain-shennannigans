@@ -4,7 +4,7 @@ use crate::frontend::routes::{
     register_node_form, render_blocks_list, render_dashboard, render_nodes_list, submit_message,
 };
 use actix_web::rt::spawn;
-use actix_web::{body, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -12,6 +12,7 @@ use std::sync::Mutex;
 
 pub struct AppState {
     pub poll_interval_s: u64,
+    pub chain_file: String,
 }
 
 #[derive(Deserialize)]
@@ -54,7 +55,7 @@ pub async fn post_block<C: Consensus>(
         .consensus
         .validate_block(chain.chain.last().unwrap(), &block)
     {
-        if let Ok(transaction) = serde_json::from_str::<Vec<MessageTransaction>>(&block.data) {
+        if let Ok(transactions) = serde_json::from_str::<Vec<MessageTransaction>>(&block.data) {
             let transaction_ids: Vec<String> =
                 transactions.iter().map(|tx| tx.id.clone()).collect();
             chain.mempool.remove_messages(&transaction_ids);
@@ -224,7 +225,11 @@ fn configure_frontend_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
 }
 
 // Start server with given chain and address
-pub async fn run_server<C: Consensus>(chain: Chain<C>, address: &str) -> std::io::Result<()>
+pub async fn run_server<C: Consensus>(
+    chain: Chain<C>,
+    address: &str,
+    chain_file: String,
+) -> std::io::Result<()>
 where
     C::Proof: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
@@ -242,8 +247,25 @@ where
         }
     });
 
+    let persistence_data = chain_data.clone();
+    let chain_file_clone = chain_file.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            if let Ok(chain) = persistence_data.lock() {
+                if let Err(e) = chain.save_to_file(&chain_file_clone) {
+                    eprintln!("Error saving chain: {}", e);
+                } else {
+                    println!("Chain saved to {}", chain_file_clone);
+                }
+            }
+        }
+    });
+
     let app_state = web::Data::new(AppState {
         poll_interval_s: super::POLL_INTERVAL_S,
+        chain_file,
     });
 
     HttpServer::new(move || {
