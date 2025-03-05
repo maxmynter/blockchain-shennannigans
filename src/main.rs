@@ -13,7 +13,7 @@ struct Args {
     #[arg(short, long)]
     port: u16,
 
-    #[arg(short = 'f', long)]
+    #[arg(short = 'f', long, num_args = 0..=1, default_missing_value = "")]
     chain_file: Option<String>,
 
     #[arg(short, long, default_value = "pow")]
@@ -27,12 +27,15 @@ struct Args {
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
-    let chain_file = args
-        .chain_file
-        .unwrap_or_else(|| format!("chain_{}.json", args.port));
+    let chain_file = match args.chain_file {
+        Some(file) if !file.is_empty() => file,
+        _ => format!("chain_{}.json", args.port),
+    };
 
     let chain = match args.consensus.as_str() {
-        "pow" => Chain::load_or_create(&chain_file, ProofOfWork::new(args.difficulty as usize)),
+        "pow" => {
+            Chain::load_or_create(&chain_file, ProofOfWork::new(args.difficulty as usize)).await
+        }
         "pos" => {
             unimplemented!("Proof of Stake not implemented.")
         }
