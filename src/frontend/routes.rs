@@ -84,7 +84,7 @@ pub async fn submit_message<C: Consensus>(
 
     let block = {
         let mut chain = data.lock().unwrap();
-        chain.new_block(message, timestamp)
+        chain.new_block(message, timestamp).await
     };
 
     let template = BlockTemplate { block: &block };

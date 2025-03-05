@@ -23,7 +23,7 @@ where
     C: Consensus,
     C::Proof: Serialize + for<'b> Deserialize<'b>,
 {
-    pub fn new(consensus: C) -> Self {
+    pub async fn new(consensus: C) -> Self {
         let mut blockchain = Chain {
             chain: Vec::new(),
             nodes: HashSet::new(),
@@ -33,7 +33,7 @@ where
 
         // Genesis Block
         let genesis_data = "Fiat Lux".to_string();
-        let genesis_proof = blockchain.consensus.prove(&blockchain, &genesis_data);
+        let genesis_proof = blockchain.consensus.prove(&blockchain, &genesis_data).await;
         let genesis_block = Block::new(
             0,
             genesis_data,
@@ -46,13 +46,13 @@ where
         blockchain
     }
 
-    pub fn new_block(&mut self, data: String, timestamp: i64) -> Block<C::Proof> {
+    pub async fn new_block(&mut self, data: String, timestamp: i64) -> Block<C::Proof> {
         // TODO: Remove in favour of new_block_from_mempool
         // Figure out how to render individual messages on the frontend.
         let prev_block = self.chain.last().unwrap();
         let prev_hash = prev_block.hash.clone();
 
-        let proof = self.consensus.prove(self, &data);
+        let proof = self.consensus.prove(self, &data).await;
 
         let block = Block::new(self.chain.len() as u64, data, timestamp, proof, prev_hash);
         self.chain.push(block.clone());
@@ -64,7 +64,7 @@ where
         self.mempool.add_message(message)
     }
 
-    pub fn new_block_from_mempool(
+    pub async fn new_block_from_mempool(
         &mut self,
         timestamp: i64,
         max_messages: usize,
@@ -77,7 +77,7 @@ where
         let data = serde_json::to_string(&messages).unwrap_or_default();
         let prev_block = self.chain.last().unwrap();
         let prev_hash = prev_block.hash.clone();
-        let proof = self.consensus.prove(self, &data);
+        let proof = self.consensus.prove(self, &data).await;
         let block = Block::new(self.chain.len() as u64, data, timestamp, proof, prev_hash);
 
         let message_ids: Vec<String> = messages.iter().map(|tx| tx.id.clone()).collect();
@@ -116,13 +116,13 @@ where
         Ok(chain)
     }
 
-    pub fn load_or_create(path: &str, consensus: C) -> Self {
+    pub async fn load_or_create(path: &str, consensus: C) -> Self {
         match File::open(path) {
             Ok(file) => match serde_json::from_reader(file) {
                 Ok(chain) => chain,
-                Err(_) => Self::new(consensus),
+                Err(_) => Self::new(consensus).await,
             },
-            Err(_) => Self::new(consensus),
+            Err(_) => Self::new(consensus).await,
         }
     }
 }

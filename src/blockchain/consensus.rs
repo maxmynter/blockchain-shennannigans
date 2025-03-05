@@ -3,12 +3,18 @@ use core::fmt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
+use std::future::Future;
+use std::pin::Pin;
 
 pub trait Consensus:
     Sized + Clone + Send + Sync + 'static + Serialize + for<'a> Deserialize<'a>
 {
     type Proof: Debug + Sync + Clone + Serialize + DeserializeOwned + Display + Send;
-    fn prove(&self, chain: &Chain<Self>, data: &str) -> Self::Proof;
+    fn prove<'a>(
+        &'a self,
+        chain: &'a Chain<Self>,
+        data: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Self::Proof> + Send + 'a>>;
     fn validate_block(
         &self,
         previous_block: &Block<Self::Proof>,
@@ -55,30 +61,45 @@ impl fmt::Display for ProofOfWork {
 impl Consensus for ProofOfWork {
     type Proof = u64;
 
-    fn prove(&self, chain: &Chain<Self>, data: &str) -> Self::Proof {
+    fn prove<'a>(
+        &'a self,
+        chain: &'a Chain<Self>,
+        data: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Self::Proof> + Send + 'a>> {
         let previous_hash = if chain.chain.is_empty() {
             "0".to_string() // Genesis Case
         } else {
             chain.chain.last().unwrap().hash.clone()
         };
 
-        let mut proof = 0u64;
-        let target = "0".repeat(self.difficulty);
+        let difficulty = self.difficulty;
+        let index = chain.chain.len() as u64;
         let timestamp = chrono::Utc::now().timestamp();
+        let data_clone = data.to_string();
+        let previous_hash_clone = previous_hash.clone();
 
-        loop {
-            let hash = crate::utils::hash(
-                chain.chain.len() as u64,
-                timestamp,
-                data,
-                &previous_hash,
-                &proof,
-            );
-            if hash.starts_with(&target) {
-                return proof;
-            }
-            proof += 1;
-        }
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || {
+                let target = "0".repeat(difficulty);
+                let mut proof = 0u64;
+
+                loop {
+                    let hash = crate::utils::hash(
+                        index,
+                        timestamp,
+                        &data_clone,
+                        &previous_hash_clone,
+                        &proof,
+                    );
+                    if hash.starts_with(&target) {
+                        return proof;
+                    }
+                    proof += 1;
+                }
+            })
+            .await
+            .expect("Mining task failed")
+        })
     }
 
     fn validate_block(
