@@ -1,12 +1,8 @@
 # Blockchain Implementation To-Do List
 
 ## High Priority
-- [ ] Enhance blockchain persistence
-  - [ ] Implement proper file-based storage with frequent saves
-  - [ ] Add recovery mechanisms
-- [ ] Implement block broadcasting
-  - [ ] Create broadcast functionality for new blocks
-  - [ ] Add validation before propagation
+- [ ] Remove unused pre-mempool code
+  - [ ] Figure out the proper logic when it does mine itself and when does it not do it. E.g. the generate and mempool/generate endpoint -- is that even necessary anymore? 
 - [ ] Create background mining/block generation task
   - [ ] Implement as configurable async task
   - [ ] Integrate with mempool for transaction selection
@@ -31,3 +27,7 @@
   - [ ] Create difficulty adjustment algorithm
 - [ ] Improve mempool transaction selection
   - [ ] Add fee-based priority
+
+## Queue
+- [ ] Transform Data Persistence of chain into proper Transaction / Wallet / Account thing
+- [ ] Miners should earn when they find a block (or stake) -> What is the best abstraction in the consensus here? 

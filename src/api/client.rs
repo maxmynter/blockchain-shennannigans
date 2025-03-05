@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use reqwest::Client;
 use serde_json;
 
@@ -5,16 +7,27 @@ use crate::blockchain::{Block, Chain, Consensus};
 
 // Broadcast a new block to all registered nodes
 pub async fn broadcast_block<C: Consensus>(
-    chain: &Chain<C>,
+    nodes: &HashSet<String>,
     block: &Block<C::Proof>,
-) -> Result<(), reqwest::Error> {
+    origin_node: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
-    for node in &chain.nodes {
-        client
+
+    for node in nodes {
+        if let Some(ref origin) = origin_node {
+            if node == origin {
+                continue;
+            }
+        }
+        match client
             .post(format!("{}/block", node))
             .json(block)
             .send()
-            .await?;
+            .await
+        {
+            Ok(_) => println!("Block broadcast to {} successful", node),
+            Err(e) => eprintln!("Error broadcasting block to {}: {}", node, e),
+        }
     }
     Ok(())
 }

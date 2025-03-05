@@ -40,8 +40,8 @@ async fn main() -> std::io::Result<()> {
     };
 
     println!(
-        "Starting node on port {} with consensus {} (chain file: {})",
-        args.port, args.consensus, chain_file
+        "Starting node on port {} with consensus {} (difficulty {}) (chain file: {})",
+        args.port, args.consensus, args.difficulty, chain_file
     );
     let chain = chain;
 

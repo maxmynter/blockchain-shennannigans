@@ -4,7 +4,7 @@ use crate::frontend::routes::{
     register_node_form, render_blocks_list, render_dashboard, render_nodes_list, submit_message,
 };
 use actix_web::rt::spawn;
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -48,22 +48,52 @@ pub async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl R
 // Post /block : Receives a new block and validates it
 pub async fn post_block<C: Consensus>(
     data: web::Data<Mutex<Chain<C>>>,
+    req: HttpRequest,
     block: web::Json<Block<C::Proof>>,
-) -> impl Responder {
-    let mut chain = data.lock().unwrap();
-    if chain
-        .consensus
-        .validate_block(chain.chain.last().unwrap(), &block)
-    {
-        if let Ok(transactions) = serde_json::from_str::<Vec<MessageTransaction>>(&block.data) {
-            let transaction_ids: Vec<String> =
-                transactions.iter().map(|tx| tx.id.clone()).collect();
-            chain.mempool.remove_messages(&transaction_ids);
+) -> impl Responder
+where
+    C::Proof: Serialize + Clone + Send + 'static,
+    Block<C::Proof>: Serialize + Clone + Send + 'static,
+{
+    let sender = req
+        .connection_info()
+        .peer_addr()
+        .unwrap_or("unknown")
+        .to_string();
+
+    let (is_valid, nodes, block_inner) = {
+        let mut chain = data.lock().unwrap();
+        let is_valid = chain
+            .consensus
+            .validate_block(chain.chain.last().unwrap(), &block);
+
+        if is_valid {
+            if let Ok(transactions) = serde_json::from_str::<Vec<MessageTransaction>>(&block.data) {
+                let transaction_ids: Vec<String> =
+                    transactions.iter().map(|tx| tx.id.clone()).collect();
+                chain.mempool.remove_messages(&transaction_ids);
+            }
+
+            let block_inner = block.into_inner();
+            chain.chain.push(block_inner.clone());
+
+            (true, chain.nodes.clone(), block_inner)
+        } else {
+            (false, HashSet::new(), block.into_inner())
         }
-        chain.chain.push(block.into_inner());
-        HttpResponse::Ok().body("Block added")
+    };
+    if is_valid {
+        let block_clone = block_inner.clone();
+        tokio::spawn(async move {
+            if let Err(e) =
+                crate::api::client::broadcast_block::<C>(&nodes, &block_clone, Some(sender)).await
+            {
+                eprintln!("Error propagating block:{}", e)
+            }
+        });
+        HttpResponse::Ok().body("block added")
     } else {
-        HttpResponse::BadRequest().body("Invalid Block")
+        HttpResponse::BadRequest().body("Invalid block")
     }
 }
 
@@ -173,12 +203,31 @@ where
     C::Proof: Serialize,
     Block<C::Proof>: Serialize,
 {
-    let mut chain = data.lock().unwrap();
-    let timestamp = chrono::Utc::now().timestamp();
+    let (block_option, nodes) = {
+        let mut chain = data.lock().unwrap();
+        let timestamp = chrono::Utc::now().timestamp();
+        let block = chain.new_block_from_mempool(timestamp, 10);
+        let nodes = if block.is_some() {
+            chain.nodes.clone()
+        } else {
+            HashSet::new()
+        };
+        (block, nodes)
+    };
 
-    match chain.new_block_from_mempool(timestamp, 10) {
-        Some(block) => HttpResponse::Ok().json(block),
-        None => HttpResponse::BadRequest().body("No pending messages in mempool"),
+    match block_option {
+        Some(block) => {
+            let block_clone = block.clone();
+            tokio::spawn(async move {
+                if let Err(e) =
+                    crate::api::client::broadcast_block::<C>(&nodes, &block_clone, None).await
+                {
+                    eprintln!("Error broadcasting new block{}", e);
+                }
+            });
+            HttpResponse::Ok().json(block)
+        }
+        None => HttpResponse::BadRequest().body("No pending transactions in mempool"),
     }
 }
 
