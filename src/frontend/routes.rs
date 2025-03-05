@@ -80,20 +80,37 @@ pub async fn submit_message<C: Consensus>(
     form: web::Form<HashMap<String, String>>,
 ) -> impl Responder {
     let message = form.get("message").cloned().unwrap_or_default();
-    let timestamp = chrono::Utc::now().timestamp();
 
-    let block = {
+    let submission_result = {
         let mut chain = data.lock().unwrap();
-        chain.new_block(message, timestamp).await
+        chain.submit_message(message)
     };
 
-    let template = BlockTemplate { block: &block };
+    if let Err(e) = submission_result {
+        return HttpResponse::InternalServerError().body(e.to_string());
+    }
 
-    match template.render() {
-        Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    let timestamp = chrono::Utc::now().timestamp();
+
+    let max_messages = 10; //TODO: Parametrize that guy
+
+    let block_option = {
+        let mut chain = data.lock().unwrap();
+        chain.new_block(timestamp, max_messages).await
+    };
+
+    match block_option {
+        Some(ref block) => {
+            let template = BlockTemplate { block };
+            match template.render() {
+                Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
+                Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+            }
+        }
+        None => HttpResponse::Ok().body("Message submitted to mempool and waiting to be minded."),
     }
 }
+
 pub async fn render_nodes_list<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
     let chain = data.lock().unwrap();
     let nodes: Vec<String> = chain.nodes.clone().into_iter().collect();

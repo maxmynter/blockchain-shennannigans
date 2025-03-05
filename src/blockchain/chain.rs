@@ -46,23 +46,11 @@ where
         blockchain
     }
 
-    pub async fn new_block(&mut self, data: String, timestamp: i64) -> Block<C::Proof> {
-        let prev_block = self.chain.last().unwrap();
-        let prev_hash = prev_block.hash.clone();
-
-        let proof = self.consensus.prove(self, &data).await;
-
-        let block = Block::new(self.chain.len() as u64, data, timestamp, proof, prev_hash);
-        self.chain.push(block.clone());
-
-        block
-    }
-
     pub fn submit_message(&mut self, message: String) -> Result<MessageTransaction, String> {
         self.mempool.add_message(message)
     }
 
-    pub async fn new_block_from_mempool(
+    pub async fn new_block(
         &mut self,
         timestamp: i64,
         max_messages: usize,

@@ -188,7 +188,7 @@ where
     let (block_option, nodes) = {
         let mut chain = data.lock().unwrap();
         let timestamp = chrono::Utc::now().timestamp();
-        let block = chain.new_block_from_mempool(timestamp, 10).await;
+        let block = chain.new_block(timestamp, 10).await;
         let nodes = if block.is_some() {
             chain.nodes.clone()
         } else {
