@@ -1,7 +1,7 @@
 use crate::api::client;
 use crate::blockchain::{Block, Chain, Consensus, Mempool, MessageTransaction};
 use crate::frontend::routes::{
-    register_node_form, render_blocks_list, render_dashboard, render_nodes_list, submit_message,
+    register_node_form, render_blocks_list, render_dashboard, render_nodes_list,
 };
 use actix_web::rt::spawn;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
@@ -169,7 +169,7 @@ async fn synchronize_chain<C: Consensus>(
     Ok(())
 }
 
-pub async fn submit_to_mempool<C: Consensus>(
+pub async fn submit_message<C: Consensus>(
     data: web::Data<Mutex<Chain<C>>>,
     req: web::Json<MessageRequest>,
 ) -> impl Responder {
@@ -180,9 +180,7 @@ pub async fn submit_to_mempool<C: Consensus>(
     }
 }
 
-pub async fn generate_block_from_mempool<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
-) -> impl Responder
+pub async fn generate_block<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder
 where
     C::Proof: Serialize,
     Block<C::Proof>: Serialize,
@@ -215,7 +213,9 @@ where
     }
 }
 
-pub async fn get_mempool_status<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn get_pending_transactions<C: Consensus>(
+    data: web::Data<Mutex<Chain<C>>>,
+) -> impl Responder {
     let chain = data.lock().unwrap();
 
     let pending_count = chain.mempool.pending_count();
@@ -233,12 +233,9 @@ pub async fn get_mempool_status<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) 
 fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
     cfg.route("/chain", web::get().to(get_chain::<C>))
         .route("/block", web::post().to(post_block::<C>))
-        .route("/mempool/submit", web::post().to(submit_to_mempool::<C>))
-        .route(
-            "/mempool/generate",
-            web::post().to(generate_block_from_mempool::<C>),
-        )
-        .route("/mempool/status", web::get().to(get_mempool_status::<C>))
+        .route("/generate", web::post().to(generate_block::<C>))
+        .route("/submit", web::post().to(submit_message::<C>))
+        .route("/pending", web::get().to(get_pending_transactions::<C>))
         .route("/nodes", web::get().to(get_nodes::<C>))
         .route("/nodes/register", web::post().to(register_node::<C>))
         .route("/alive", web::get().to(alive));

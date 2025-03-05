@@ -1,5 +1,5 @@
 ### Submit a message to mempool
-POST http://127.0.0.1:8080/mempool/submit
+POST http://127.0.0.1:8080/submit
 Content-Type: application/json
 
 {
@@ -7,7 +7,7 @@ Content-Type: application/json
 }
 
 ### Submit another message to mempool
-POST http://127.0.0.1:8080/mempool/submit
+POST http://127.0.0.1:8080/submit
 Content-Type: application/json
 
 {
@@ -15,7 +15,7 @@ Content-Type: application/json
 }
 
 ### Submit a third message to mempool
-POST http://127.0.0.1:8080/mempool/submit
+POST http://127.0.0.1:8080/submit
 Content-Type: application/json
 
 {
@@ -23,13 +23,13 @@ Content-Type: application/json
 }
 
 ### Generate a block from mempool transactions
-POST http://127.0.0.1:8080/mempool/generate
+POST http://127.0.0.1:8080/generate
 Content-Type: application/json
 
 {}
 
 ### Get mempool status
-GET http://127.0.0.1:8080/mempool/status
+GET http://127.0.0.1:8080/pending
 
 ### Check the chain to see if the mempool messages were added
 GET http://127.0.0.1:8080/chain

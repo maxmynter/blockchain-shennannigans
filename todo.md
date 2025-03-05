@@ -1,6 +1,7 @@
 # Blockchain Implementation To-Do List
 
 ## High Priority
+- [ ] Make the names of the memcache endpoints and fn's nice.
   - [ ] Figure out the proper logic when it does mine itself and when does it not do it. E.g. the generate and mempool/generate endpoint -- is that even necessary anymore? 
 - [ ] Create background mining/block generation task
   - [ ] Implement as configurable async task
