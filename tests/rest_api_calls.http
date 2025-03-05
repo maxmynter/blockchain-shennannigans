@@ -20,14 +20,6 @@ Content-Type: application/json
 "proof": 42
 }
 
-### Generate a valid block
-POST http://127.0.0.1:8080/generate
-Content-Type: application/json
-
-{
-"data": "Per Aspera ad astra"
-}
-
 ### Post a generated valid block
 POST http://127.0.0.1:8080/block
 Content-Type: application/json

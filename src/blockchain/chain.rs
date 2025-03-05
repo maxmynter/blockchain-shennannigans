@@ -47,8 +47,6 @@ where
     }
 
     pub async fn new_block(&mut self, data: String, timestamp: i64) -> Block<C::Proof> {
-        // TODO: Remove in favour of new_block_from_mempool
-        // Figure out how to render individual messages on the frontend.
         let prev_block = self.chain.last().unwrap();
         let prev_hash = prev_block.hash.clone();
 

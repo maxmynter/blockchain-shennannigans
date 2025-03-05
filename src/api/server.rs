@@ -97,22 +97,6 @@ where
     }
 }
 
-pub async fn generate_block<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
-    req: web::Json<BlockRequest>,
-) -> impl Responder
-where
-    C::Proof: Serialize,
-    Block<C::Proof>: Serialize,
-{
-    let mut chain = data.lock().unwrap();
-    let timestamp = chrono::Utc::now().timestamp();
-
-    let block = chain.new_block(req.data.clone(), timestamp).await;
-
-    HttpResponse::Ok().json(block)
-}
-
 pub async fn register_node<C: Consensus>(
     data: web::Data<Mutex<Chain<C>>>,
     req: web::Json<NodeRequest>,
@@ -249,7 +233,6 @@ pub async fn get_mempool_status<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) 
 fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
     cfg.route("/chain", web::get().to(get_chain::<C>))
         .route("/block", web::post().to(post_block::<C>))
-        .route("/generate", web::post().to(generate_block::<C>))
         .route("/mempool/submit", web::post().to(submit_to_mempool::<C>))
         .route(
             "/mempool/generate",
