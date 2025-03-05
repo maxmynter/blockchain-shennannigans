@@ -1,6 +1,7 @@
 # Blockchain Implementation To-Do List
 
 ## High Priority
+- [ ] Make the consensus proove method non blocking so the http service runs
 - [ ] Remove unused pre-mempool code
   - [ ] Figure out the proper logic when it does mine itself and when does it not do it. E.g. the generate and mempool/generate endpoint -- is that even necessary anymore? 
 - [ ] Create background mining/block generation task
@@ -17,6 +18,7 @@
 - [ ] Clean up legacy code
   - [ ] Remove single-message implementation
   - [ ] Update all UI components
+- [ ] Make the difficulty addaptive (and remove it from persistence)
 
 ## Low Priority
 - [ ] Dockerize application
