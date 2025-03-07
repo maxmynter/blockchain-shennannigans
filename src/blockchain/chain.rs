@@ -46,15 +46,15 @@ where
         blockchain
     }
 
-    pub fn submit_message(&mut self, message: String) -> Result<MessageTransaction, String> {
+    pub fn submit_message_to_mempool(
+        &mut self,
+        message: String,
+    ) -> Result<MessageTransaction, String> {
         self.mempool.add_message(message)
     }
 
-    pub async fn new_block(
-        &mut self,
-        timestamp: i64,
-        max_messages: usize,
-    ) -> Option<Block<C::Proof>> {
+    pub async fn new_block(&mut self, timestamp: i64) -> Option<Block<C::Proof>> {
+        let max_messages = 10;
         let messages = self.mempool.get_pending_messages(max_messages);
         if messages.is_empty() {
             return None;

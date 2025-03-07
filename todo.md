@@ -1,5 +1,8 @@
 # Blockchain Implementation To-Do List
 
+## Weird Stuff
+- [ ] Wtf is the maxsize of a mempool. Does that even make sense?
+
 ## High Priority
 - [ ] Figure out the proper logic when it does mine itself and when does it not do it. E.g. the generate and mempool/generate endpoint -- is that even necessary anymore? 
 - [ ] Create background mining/block generation task

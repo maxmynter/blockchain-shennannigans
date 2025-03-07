@@ -83,7 +83,7 @@ pub async fn submit_message<C: Consensus>(
 
     let submission_result = {
         let mut chain = data.lock().unwrap();
-        chain.submit_message(message)
+        chain.submit_message_to_mempool(message)
     };
 
     if let Err(e) = submission_result {
@@ -92,11 +92,9 @@ pub async fn submit_message<C: Consensus>(
 
     let timestamp = chrono::Utc::now().timestamp();
 
-    let max_messages = 10; //TODO: Parametrize that guy
-
     let block_option = {
         let mut chain = data.lock().unwrap();
-        chain.new_block(timestamp, max_messages).await
+        chain.new_block(timestamp).await
     };
 
     match block_option {
