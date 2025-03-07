@@ -174,7 +174,7 @@ pub async fn submit_message<C: Consensus>(
     req: web::Json<MessageRequest>,
 ) -> impl Responder {
     let mut chain = data.lock().unwrap();
-    match chain.submit_message(req.message.clone()) {
+    match chain.submit_message_to_mempool(req.message.clone()) {
         Ok(transaction) => HttpResponse::Ok().json(transaction),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
