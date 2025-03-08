@@ -291,10 +291,17 @@ where
     let web_chain_data = web::Data::new(chain_data.clone());
     println!("Starting rustchain node on port {}", address);
 
+    let mining_runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2) // TODO: parametrize
+        .enable_all()
+        .build()
+        .unwrap();
+
     let (mut mining_coordinator, mining_tx) = MiningCoordinator::new(chain_data.clone(), 100);
-    tokio::spawn(async move {
+    let mining_handle = mining_runtime.spawn(async move {
         mining_coordinator.run().await;
     });
+    let mining_runtime = Arc::new(mining_runtime);
 
     let app_state = web::Data::new(AppState::<C> {
         poll_interval_s: super::POLL_INTERVAL_S,
@@ -341,6 +348,7 @@ where
             .app_data(app_state.clone())
             .configure(configure_api_routes::<C>)
             .configure(configure_frontend_routes::<C>)
+            .app_data(web::Data::new(mining_runtime.clone()))
     })
     .bind(address)?
     .run()
