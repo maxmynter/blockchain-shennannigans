@@ -74,9 +74,9 @@ where
                     };
 
                     if let Err(e) = client::broadcast_block::<C>(&nodes, &block, None).await {
-                        eprintln("Error broadcasting mined block: {}", e);
+                        eprintln!("Error broadcasting mined block: {}", e);
                     }
-                    println("Successfully mined and broadcast block #{}", block.index);
+                    println!("Successfully mined and broadcast block #{}", block.index);
                 } else {
                     // No messages to mine, pause to avoid
                     // busy looping
