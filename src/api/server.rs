@@ -1,6 +1,7 @@
 use crate::api::client;
 use crate::blockchain::{
-    Block, Chain, Consensus, Mempool, MessageTransaction, MiningCommand, MiningCoordinator,
+    Block, Chain, ChainInfo, Consensus, Mempool, MessageTransaction, MiningCommand,
+    MiningCoordinator, MiningInterface,
 };
 use crate::frontend::routes::{
     register_node_form, render_blocks_list, render_dashboard, render_nodes_list,
@@ -21,6 +22,7 @@ pub struct AppState<C: Consensus> {
     pub chain_file: String,
     pub mining_tx: Sender<MiningCommand>,
     pub mining_handle: Option<MiningJoinHandle>,
+    pub chain_info: Arc<Mutex<ChainInfo>>,
     _consensus_type: std::marker::PhantomData<C>,
 }
 
@@ -57,6 +59,7 @@ pub async fn get_chain<C: Consensus>(data: web::Data<Arc<Mutex<Chain<C>>>>) -> i
 // Post /block : Receives a new block and validates it
 pub async fn post_block<C: Consensus>(
     data: web::Data<Arc<Mutex<Chain<C>>>>,
+    app_state: web::Data<AppState<C>>,
     req: HttpRequest,
     block: web::Json<Block<C::Proof>>,
 ) -> impl Responder
@@ -85,6 +88,10 @@ where
 
             let block_inner = block.into_inner();
             chain.chain.push(block_inner.clone());
+
+            let mut info = app_state.chain_info.lock().await;
+            info.length = chain.chain.len() as u64;
+            info.last_hash = block_inner.hash.clone();
 
             (true, chain.nodes.clone(), block_inner)
         } else {
@@ -138,6 +145,7 @@ pub async fn get_nodes<C: Consensus>(data: web::Data<Arc<Mutex<Chain<C>>>>) -> i
 
 async fn synchronize_chain<C: Consensus>(
     chain_data: &Arc<Mutex<Chain<C>>>,
+    chain_info: &Arc<Mutex<ChainInfo>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let nodes = {
         let chain = chain_data.lock().await;
@@ -172,6 +180,12 @@ async fn synchronize_chain<C: Consensus>(
         let mut chain = chain_data.lock().await;
         if new_chain.len() > chain.chain.len() {
             chain.chain = new_chain;
+
+            let last_block = chain.chain.last().unwrap();
+            let mut info = chain_info.lock().await;
+            info.length = chain.chain.len() as u64;
+            info.last_hash = last_block.hash.clone();
+
             println!("Chain updated. New length {}", max_len);
         }
     }
@@ -196,12 +210,15 @@ pub async fn submit_message<C: Consensus>(
     }
 }
 
-pub async fn generate_block<C: Consensus>(data: web::Data<Arc<Mutex<Chain<C>>>>) -> impl Responder
+pub async fn generate_block<C: Consensus>(
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
+    app_state: web::Data<AppState<C>>,
+) -> impl Responder
 where
     C::Proof: Serialize,
     Block<C::Proof>: Serialize,
 {
-    let (block_option, nodes) = {
+    let (block_option, nodes, chain_len) = {
         let mut chain = data.lock().await;
         let timestamp = chrono::Utc::now().timestamp();
         let block = chain.new_block(timestamp).await;
@@ -210,12 +227,16 @@ where
         } else {
             HashSet::new()
         };
-        (block, nodes)
+        let chain_len = chain.chain.len() as u64;
+        (block, nodes, chain_len)
     };
 
     match block_option {
         Some(block) => {
             let block_clone = block.clone();
+            let mut info = app_state.chain_info.lock().await;
+            info.length = chain_len;
+            info.last_hash = block.hash.clone();
             tokio::spawn(async move {
                 if let Err(e) =
                     crate::api::client::broadcast_block::<C>(&nodes, &block_clone, None).await
@@ -294,16 +315,73 @@ where
     let web_chain_data = web::Data::new(chain_data.clone());
     println!("Starting rustchain node on port {}", address);
 
+    let (block_tx, mut block_rx) = tokio::sync::mpsc::channel::<(Block<C::Proof>, Vec<String>)>(32);
+
+    let mempool = {
+        let chain = chain_data.lock().await;
+        Arc::new(Mutex::new(chain.mempool.clone()))
+    };
+
+    let chain_info = {
+        let chain = chain_data.lock().await;
+        let last_block = chain.chain.last().unwrap();
+        Arc::new(Mutex::new(ChainInfo {
+            length: chain.chain.len() as u64,
+            last_hash: last_block.hash.clone(),
+        }))
+    };
+
+    let mining_interface = MiningInterface {
+        mempool_accessor: mempool.clone(),
+        chain_info: chain_info.clone(),
+        consensus: chain_data.lock().await.consensus.clone(),
+        block_channel: block_tx,
+    };
+
+    let (mut mining_coordinator, mining_tx) = MiningCoordinator::new(mining_interface, 100);
+
+    let block_receiver_chain_data = chain_data.clone();
+    let block_receiver_chain_info = chain_info.clone();
+
+    tokio::spawn(async move {
+        while let Some((block, message_ids)) = block_rx.recv().await {
+            let mut chain = block_receiver_chain_data.lock().await;
+            if chain.chain.len() as u64 == block.index {
+                chain.mempool.remove_messages(&message_ids);
+                chain.chain.push(block.clone());
+
+                let block_hash = block.hash.clone();
+                let block_index = block.index;
+                let nodes = chain.nodes.clone();
+                {
+                    let mut info = block_receiver_chain_info.lock().await;
+                    info.length = chain.chain.len() as u64;
+                    info.last_hash = block_hash;
+                }
+
+                let block_clone = block.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = client::broadcast_block::<C>(&nodes, &block_clone, None).await {
+                        eprintln!("Error broadcasting mined block: {}", e);
+                    }
+                });
+                println!("Block #{} added to chain", block_index);
+            } else {
+                println!("Chain changed during mining, discarding block");
+            }
+        }
+    });
+
     let mining_runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2) // TODO: parametrize
         .enable_all()
         .build()
         .unwrap();
 
-    let (mut mining_coordinator, mining_tx) = MiningCoordinator::new(chain_data.clone(), 100);
     let mining_handle = mining_runtime.spawn(async move {
         mining_coordinator.run().await;
     });
+
     let mining_runtime = Arc::new(mining_runtime);
 
     let app_state = web::Data::new(AppState::<C> {
@@ -311,17 +389,20 @@ where
         chain_file: chain_file.clone(),
         mining_tx: mining_tx.clone(),
         mining_handle: Some(mining_handle),
+        chain_info: chain_info.clone(),
         _consensus_type: std::marker::PhantomData,
     });
 
     let _ = mining_tx.send(MiningCommand::StartMining).await;
 
-    let consensus_data = chain_data.clone();
+    let sync_chain_data = chain_data.clone();
+    let sync_chain_info = chain_info.clone();
+
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
         loop {
             interval.tick().await;
-            if let Err(e) = synchronize_chain(&consensus_data).await {
+            if let Err(e) = synchronize_chain(&sync_chain_data, &sync_chain_info).await {
                 eprintln!("Error synchronizing chain: {}", e);
             }
         }

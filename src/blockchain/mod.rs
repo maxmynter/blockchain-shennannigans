@@ -8,4 +8,4 @@ pub use block::Block;
 pub use chain::Chain;
 pub use consensus::{Consensus, ProofOfWork};
 pub use mempool::{Mempool, MessageTransaction};
-pub use mining::{MiningCommand, MiningCoordinator};
+pub use mining::{ChainInfo, MiningCommand, MiningCoordinator, MiningInterface};

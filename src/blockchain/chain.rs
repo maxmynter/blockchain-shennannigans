@@ -33,7 +33,14 @@ where
 
         // Genesis Block
         let genesis_data = "Fiat Lux".to_string();
-        let genesis_proof = blockchain.consensus.prove(&blockchain, &genesis_data).await;
+        let timestamp = Utc::now().timestamp();
+        let index = 0;
+        let previous_hash = "0".to_string();
+
+        let genesis_proof = blockchain
+            .consensus
+            .prove(index, timestamp, &genesis_data, &previous_hash)
+            .await;
         let genesis_block = Block::new(
             0,
             genesis_data,
@@ -63,8 +70,14 @@ where
         let data = serde_json::to_string(&messages).unwrap_or_default();
         let prev_block = self.chain.last().unwrap();
         let prev_hash = prev_block.hash.clone();
-        let proof = self.consensus.prove(self, &data).await;
-        let block = Block::new(self.chain.len() as u64, data, timestamp, proof, prev_hash);
+        let index = self.chain.len() as u64;
+
+        let proof = self
+            .consensus
+            .prove(index, timestamp, &data, &prev_hash)
+            .await;
+
+        let block = Block::new(index, data, timestamp, proof, prev_hash);
 
         let message_ids: Vec<String> = messages.iter().map(|tx| tx.id.clone()).collect();
         self.mempool.remove_messages(&message_ids);

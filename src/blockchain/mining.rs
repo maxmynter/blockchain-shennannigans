@@ -1,10 +1,11 @@
-use crate::api::client;
-use crate::blockchain::{Block, Chain, Consensus, MessageTransaction};
+use crate::blockchain::{Block, Consensus, MessageTransaction};
 use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
+
+use super::Mempool;
 
 pub enum MiningCommand {
     StartMining,
@@ -12,9 +13,21 @@ pub enum MiningCommand {
     Shutdown,
 }
 
+pub struct MiningInterface<C: Consensus> {
+    pub mempool_accessor: Arc<Mutex<Mempool>>,
+    pub chain_info: Arc<Mutex<ChainInfo>>,
+    pub consensus: C,
+    pub block_channel: mpsc::Sender<(Block<C::Proof>, Vec<String>)>,
+}
+
+pub struct ChainInfo {
+    pub length: u64,
+    pub last_hash: String,
+}
+
 pub struct MiningCoordinator<C: Consensus> {
     command_rx: Receiver<MiningCommand>,
-    chain_data: Arc<Mutex<Chain<C>>>,
+    mining_interface: MiningInterface<C>,
     accumulation_time_ms: u64,
     is_mining: bool,
 }
@@ -24,23 +37,19 @@ where
     C::Proof: Serialize + Clone + Send + Sync + 'static,
 {
     pub fn new(
-        chain_data: Arc<Mutex<Chain<C>>>,
+        mining_interface: MiningInterface<C>,
         accumulation_time_ms: u64,
     ) -> (Self, Sender<MiningCommand>) {
         let (command_tx, command_rx) = mpsc::channel(32);
         (
             MiningCoordinator {
                 command_rx,
-                chain_data,
+                mining_interface,
                 accumulation_time_ms,
                 is_mining: false,
             },
             command_tx,
         )
-    }
-    async fn prove_with_chain(&self, consensus: &C, data: &str) -> C::Proof {
-        let chain = self.chain_data.lock().await;
-        consensus.prove(&chain, data).await
     }
 
     pub async fn run(&mut self) {
@@ -66,22 +75,23 @@ where
             }
 
             let messages = {
-                let chain = self.chain_data.lock().await;
+                let mempool = self.mining_interface.mempool_accessor.lock().await;
                 let max_messages = 10; // TODO: Parametrize this guy
-                chain.mempool.get_pending_messages(max_messages)
+                mempool.get_pending_messages(max_messages)
             };
 
             if !messages.is_empty() {
-                if let Some(block) = self.mine_block(&messages).await {
-                    let nodes = {
-                        let chain = self.chain_data.lock().await;
-                        chain.nodes.clone()
-                    };
-
-                    if let Err(e) = client::broadcast_block::<C>(&nodes, &block, None).await {
-                        eprintln!("Error broadcasting mined block: {}", e);
+                if let Some((block, message_ids)) = self.mine_block(&messages).await {
+                    if let Err(e) = self
+                        .mining_interface
+                        .block_channel
+                        .send((block.clone(), message_ids))
+                        .await
+                    {
+                        eprintln!("Error sending mined block: {}", e);
+                    } else {
+                        println!("Successfully minted block #{}", block.index);
                     }
-                    println!("Successfully mined and broadcast block #{}", block.index);
                 } else {
                     // No messages to mine, pause to avoid
                     // busy looping
@@ -94,39 +104,31 @@ where
         }
     }
 
-    async fn mine_block(&self, messages: &[MessageTransaction]) -> Option<Block<C::Proof>> {
+    async fn mine_block(
+        &self,
+        messages: &[MessageTransaction],
+    ) -> Option<(Block<C::Proof>, Vec<String>)> {
         if messages.is_empty() {
             return None;
         }
 
-        let data = serde_json::to_string(&messages).unwrap_or_default();
-        let timestamp = chrono::Utc::now().timestamp();
-
-        let (prev_hash, chain_len, consensus) = {
-            let chain = self.chain_data.lock().await;
-            let prev_block = chain.chain.last().unwrap();
-            (
-                prev_block.hash.clone(),
-                chain.chain.len() as u64,
-                chain.consensus.clone(),
-            )
+        let (chain_len, prev_hash) = {
+            let chain_info = self.mining_interface.chain_info.lock().await;
+            (chain_info.length, chain_info.last_hash.clone())
         };
 
-        let proof = self.prove_with_chain(&consensus, &data).await;
+        let data = serde_json::to_string(&messages).unwrap_or_default();
+        let timestamp = chrono::Utc::now().timestamp();
+        let consensus = self.mining_interface.consensus.clone();
+
+        let proof = consensus
+            .prove(chain_len, timestamp, &data, &prev_hash)
+            .await;
 
         let block = Block::new(chain_len, data, timestamp, proof, prev_hash);
-        {
-            let mut chain = self.chain_data.lock().await;
-            if chain.chain.len() as u64 == chain_len {
-                let message_ids: Vec<String> = messages.iter().map(|tx| tx.id.clone()).collect();
-                chain.mempool.remove_messages(&message_ids);
 
-                chain.chain.push(block.clone());
-                Some(block)
-            } else {
-                println!("Chain changes during mining, discarding block");
-                None
-            }
-        }
+        let message_ids: Vec<String> = messages.iter().map(|tx| tx.id.clone()).collect();
+
+        Some((block, message_ids))
     }
 }

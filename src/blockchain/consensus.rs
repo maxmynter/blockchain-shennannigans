@@ -12,14 +12,18 @@ pub trait Consensus:
     type Proof: Debug + Sync + Clone + Serialize + DeserializeOwned + Display + Send;
     fn prove<'a>(
         &'a self,
-        chain: &'a Chain<Self>,
+        next_index: u64,
+        timestamp: i64,
         data: &'a str,
+        previous_hash: &'a str,
     ) -> Pin<Box<dyn Future<Output = Self::Proof> + Send + 'a>>;
+
     fn validate_block(
         &self,
         previous_block: &Block<Self::Proof>,
         block: &Block<Self::Proof>,
     ) -> bool;
+
     fn validate_chain(&self, chain: &Chain<Self>) -> bool {
         if chain.chain.is_empty() {
             return true;
@@ -63,20 +67,14 @@ impl Consensus for ProofOfWork {
 
     fn prove<'a>(
         &'a self,
-        chain: &'a Chain<Self>,
+        next_index: u64,
+        timestamp: i64,
         data: &'a str,
+        previous_hash: &'a str,
     ) -> Pin<Box<dyn Future<Output = Self::Proof> + Send + 'a>> {
-        let previous_hash = if chain.chain.is_empty() {
-            "0".to_string() // Genesis Case
-        } else {
-            chain.chain.last().unwrap().hash.clone()
-        };
-
         let difficulty = self.difficulty;
-        let index = chain.chain.len() as u64;
-        let timestamp = chrono::Utc::now().timestamp();
         let data_clone = data.to_string();
-        let previous_hash_clone = previous_hash.clone();
+        let previous_hash_clone = previous_hash.to_string();
 
         Box::pin(async move {
             tokio::task::spawn_blocking(move || {
@@ -85,7 +83,7 @@ impl Consensus for ProofOfWork {
 
                 loop {
                     let hash = crate::utils::hash(
-                        index,
+                        next_index,
                         timestamp,
                         &data_clone,
                         &previous_hash_clone,
