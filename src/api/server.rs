@@ -14,10 +14,13 @@ use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 
+type MiningJoinHandle = tokio::task::JoinHandle<()>;
+
 pub struct AppState<C: Consensus> {
     pub poll_interval_s: u64,
     pub chain_file: String,
     pub mining_tx: Sender<MiningCommand>,
+    pub mining_handle: Option<MiningJoinHandle>,
     _consensus_type: std::marker::PhantomData<C>,
 }
 
@@ -307,6 +310,7 @@ where
         poll_interval_s: super::POLL_INTERVAL_S,
         chain_file: chain_file.clone(),
         mining_tx: mining_tx.clone(),
+        mining_handle: Some(mining_handle),
         _consensus_type: std::marker::PhantomData,
     });
 
