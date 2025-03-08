@@ -1,6 +1,6 @@
 use crate::api::client;
 use crate::blockchain::{
-    Block, Chain, ChainInfo, Consensus, Mempool, MessageTransaction, MiningCommand,
+    Block, Chain, ChainInfo, Consensus, Mempool, MessageQueue, MessageTransaction, MiningCommand,
     MiningCoordinator, MiningInterface,
 };
 use crate::frontend::routes::{
@@ -193,19 +193,15 @@ async fn synchronize_chain<C: Consensus>(
 }
 
 pub async fn submit_message<C: Consensus>(
-    data: web::Data<Arc<Mutex<Chain<C>>>>,
+    message_queue: web::Data<MessageQueue>,
     app_state: web::Data<AppState<C>>,
     req: web::Json<MessageRequest>,
 ) -> impl Responder {
-    let result = {
-        let mut chain = data.lock().await;
-        chain.submit_message_to_mempool(req.message.clone())
-    };
-
-    let _ = app_state.mining_tx.send(MiningCommand::StartMining).await;
-
-    match result {
-        Ok(transaction) => HttpResponse::Ok().json(transaction),
+    match message_queue.submit_message(req.message.clone()).await {
+        Ok(_) => {
+            let _ = app_state.mining_tx.send(MiningCommand::StartMining).await;
+            HttpResponse::Ok().body("Message queued successfully")
+        }
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
@@ -322,6 +318,9 @@ where
         Arc::new(Mutex::new(chain.mempool.clone()))
     };
 
+    let message_queue = MessageQueue::new(mempool.clone());
+    let message_queue_data = web::Data::new(message_queue.clone());
+
     let chain_info = {
         let chain = chain_data.lock().await;
         let last_block = chain.chain.last().unwrap();
@@ -431,6 +430,7 @@ where
         App::new()
             .app_data(web_chain_data.clone())
             .app_data(app_state.clone())
+            .app_data(message_queue_data.clone())
             .configure(configure_api_routes::<C>)
             .configure(configure_frontend_routes::<C>)
             .app_data(web::Data::new(mining_runtime.clone()))

@@ -1,10 +1,10 @@
 # Blockchain Implementation To-Do List
 
 ## Weird Stuff
-- [ ] Wtf is the maxsize of a mempool. Does that even make sense?
+- [ ] Parametrize maxsize of mempool
 - [ ] Graceful stopping with ctrl c
 - [ ] Fix that the frontend send works again.
-- [ ] Make the 2nd subsequent request non blocking to with a restart of the mining
+- [ ] Fix but that queue is not cleared after mining
 
 ## High Priority
 - [ ] Figure out the proper logic when it does mine itself and when does it not do it. E.g. the generate and mempool/generate endpoint -- is that even necessary anymore? 

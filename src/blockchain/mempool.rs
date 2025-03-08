@@ -1,7 +1,10 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
+use tokio::sync::Mutex as TokioMutex;
 use uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +25,32 @@ impl MessageTransaction {
             message,
             timestamp: now,
             submitted_at: now,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct MessageQueue {
+    sender: mpsc::Sender<String>,
+}
+
+impl MessageQueue {
+    pub fn new(mempool: Arc<TokioMutex<Mempool>>) -> Self {
+        let (tx, mut rx) = mpsc::channel::<String>(100);
+
+        tokio::spawn(async move {
+            while let Some(message) = rx.recv().await {
+                let mut pool = mempool.lock().await;
+                let _ = pool.add_message(message);
+            }
+        });
+        MessageQueue { sender: tx }
+    }
+
+    pub async fn submit_message(&self, message: String) -> Result<(), String> {
+        match self.sender.send(message).await {
+            Ok(_) => Ok(()),
+            Err(_) => Err("Failed to send queue message".to_string()),
         }
     }
 }

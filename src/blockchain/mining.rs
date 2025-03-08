@@ -71,26 +71,24 @@ where
                 }
             }
             if self.is_mining {
-                sleep(Duration::from_millis(self.accumulation_time_ms)).await;
-            }
+                let messages = {
+                    let mempool = self.mining_interface.mempool_accessor.lock().await;
+                    // TODO: You guessed it, parametrize
+                    mempool.get_pending_messages(10)
+                };
 
-            let messages = {
-                let mempool = self.mining_interface.mempool_accessor.lock().await;
-                let max_messages = 10; // TODO: Parametrize this guy
-                mempool.get_pending_messages(max_messages)
-            };
-
-            if !messages.is_empty() {
-                if let Some((block, message_ids)) = self.mine_block(&messages).await {
-                    if let Err(e) = self
-                        .mining_interface
-                        .block_channel
-                        .send((block.clone(), message_ids))
-                        .await
-                    {
-                        eprintln!("Error sending mined block: {}", e);
-                    } else {
-                        println!("Successfully minted block #{}", block.index);
+                if !messages.is_empty() {
+                    if let Some((block, message_ids)) = self.mine_block(&messages).await {
+                        if let Err(e) = self
+                            .mining_interface
+                            .block_channel
+                            .send((block.clone(), message_ids))
+                            .await
+                        {
+                            eprintln!("Error sending mined block: {}", e);
+                        } else {
+                            println!("Successfully mined block #{}", block.index);
+                        }
                     }
                 } else {
                     // No messages to mine, pause to avoid
