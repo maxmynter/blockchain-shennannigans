@@ -10,8 +10,9 @@ use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::Mutex;
 
 pub struct AppState<C: Consensus> {
     pub poll_interval_s: u64,
@@ -46,7 +47,7 @@ pub async fn alive() -> impl Responder {
 
 // Get /chain: Returns current chain
 pub async fn get_chain<C: Consensus>(data: web::Data<Arc<Mutex<Chain<C>>>>) -> impl Responder {
-    let chain = data.lock().unwrap();
+    let chain = data.lock().await;
     HttpResponse::Ok().json(chain.chain.clone())
 }
 
@@ -67,7 +68,7 @@ where
         .to_string();
 
     let (is_valid, nodes, block_inner) = {
-        let mut chain = data.lock().unwrap();
+        let mut chain = data.lock().await;
         let is_valid = chain
             .consensus
             .validate_block(chain.chain.last().unwrap(), &block);
@@ -111,11 +112,11 @@ pub async fn register_node<C: Consensus>(
         return HttpResponse::BadRequest().body(format!("Node {} cannot be reached", new_address));
     }
     {
-        let mut chain = data.lock().unwrap();
+        let mut chain = data.lock().await;
         chain.add_node(&new_address);
     }
     // Clone chain to release mutex and allow concurrency
-    let chain_clone = data.lock().unwrap().clone();
+    let chain_clone = data.lock().await.clone();
     spawn(client::broadcast_node_registration(
         chain_clone,
         new_address,
@@ -125,7 +126,7 @@ pub async fn register_node<C: Consensus>(
 }
 
 pub async fn get_nodes<C: Consensus>(data: web::Data<Arc<Mutex<Chain<C>>>>) -> impl Responder {
-    let chain = data.lock().unwrap();
+    let chain = data.lock().await;
     let nodes = chain.nodes.clone();
     let registered_nodes = RegisteredNodes { nodes };
 
@@ -136,7 +137,7 @@ async fn synchronize_chain<C: Consensus>(
     chain_data: &Arc<Mutex<Chain<C>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let nodes = {
-        let chain = chain_data.lock().unwrap();
+        let chain = chain_data.lock().await;
         chain.nodes.clone()
     };
     if nodes.is_empty() {
@@ -150,7 +151,7 @@ async fn synchronize_chain<C: Consensus>(
                 let temp_chain = Chain {
                     chain: response,
                     nodes: Default::default(),
-                    consensus: chain_data.lock().unwrap().consensus.clone(),
+                    consensus: chain_data.lock().await.consensus.clone(),
                     mempool: Mempool::new(10, 100),
                 };
                 if temp_chain.consensus.validate_chain(&temp_chain)
@@ -165,7 +166,7 @@ async fn synchronize_chain<C: Consensus>(
     }
 
     if let Some(new_chain) = best_chain {
-        let mut chain = chain_data.lock().unwrap();
+        let mut chain = chain_data.lock().await;
         if new_chain.len() > chain.chain.len() {
             chain.chain = new_chain;
             println!("Chain updated. New length {}", max_len);
@@ -180,7 +181,7 @@ pub async fn submit_message<C: Consensus>(
     req: web::Json<MessageRequest>,
 ) -> impl Responder {
     let result = {
-        let mut chain = data.lock().unwrap();
+        let mut chain = data.lock().await;
         chain.submit_message_to_mempool(req.message.clone())
     };
 
@@ -198,7 +199,7 @@ where
     Block<C::Proof>: Serialize,
 {
     let (block_option, nodes) = {
-        let mut chain = data.lock().unwrap();
+        let mut chain = data.lock().await;
         let timestamp = chrono::Utc::now().timestamp();
         let block = chain.new_block(timestamp).await;
         let nodes = if block.is_some() {
@@ -228,7 +229,7 @@ where
 pub async fn get_pending_transactions<C: Consensus>(
     data: web::Data<Arc<Mutex<Chain<C>>>>,
 ) -> impl Responder {
-    let chain = data.lock().unwrap();
+    let chain = data.lock().await;
 
     let pending_count = chain.mempool.pending_count();
 
@@ -286,7 +287,7 @@ pub async fn run_server<C: Consensus>(
 where
     C::Proof: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    let chain_data = Arc::new(Mutex::new(chain));
+    let chain_data = Arc::new(tokio::sync::Mutex::new(chain));
     let web_chain_data = web::Data::new(chain_data.clone());
     println!("Starting rustchain node on port {}", address);
 
@@ -323,7 +324,7 @@ where
         loop {
             interval.tick().await;
             let save_result = {
-                let chain = persistence_data.lock().unwrap();
+                let chain = persistence_data.lock().await;
                 chain.save_to_file(&chain_file_clone)
             };
             if let Err(e) = save_result {

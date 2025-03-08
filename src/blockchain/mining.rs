@@ -1,8 +1,9 @@
 use crate::api::client;
 use crate::blockchain::{Block, Chain, Consensus, MessageTransaction};
 use serde::Serialize;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
 pub enum MiningCommand {
@@ -38,7 +39,7 @@ where
         )
     }
     async fn prove_with_chain(&self, consensus: &C, data: &str) -> C::Proof {
-        let chain = self.chain_data.lock().unwrap();
+        let chain = self.chain_data.lock().await;
         consensus.prove(&chain, data).await
     }
 
@@ -65,7 +66,7 @@ where
             }
 
             let messages = {
-                let chain = self.chain_data.lock().unwrap();
+                let chain = self.chain_data.lock().await;
                 let max_messages = 10; // TODO: Parametrize this guy
                 chain.mempool.get_pending_messages(max_messages)
             };
@@ -73,7 +74,7 @@ where
             if !messages.is_empty() {
                 if let Some(block) = self.mine_block(&messages).await {
                     let nodes = {
-                        let chain = self.chain_data.lock().unwrap();
+                        let chain = self.chain_data.lock().await;
                         chain.nodes.clone()
                     };
 
@@ -102,7 +103,7 @@ where
         let timestamp = chrono::Utc::now().timestamp();
 
         let (prev_hash, chain_len, consensus) = {
-            let chain = self.chain_data.lock().unwrap();
+            let chain = self.chain_data.lock().await;
             let prev_block = chain.chain.last().unwrap();
             (
                 prev_block.hash.clone(),
@@ -115,7 +116,7 @@ where
 
         let block = Block::new(chain_len, data, timestamp, proof, prev_hash);
         {
-            let mut chain = self.chain_data.lock().unwrap();
+            let mut chain = self.chain_data.lock().await;
             if chain.chain.len() as u64 == chain_len {
                 let message_ids: Vec<String> = messages.iter().map(|tx| tx.id.clone()).collect();
                 chain.mempool.remove_messages(&message_ids);

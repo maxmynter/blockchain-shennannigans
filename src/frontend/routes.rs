@@ -4,7 +4,8 @@ use actix_web::rt::spawn;
 use actix_web::{web, HttpResponse, Responder};
 use askama::Template;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Template)]
 #[template(path = "views/dashboard.html")]
@@ -43,7 +44,7 @@ pub async fn render_dashboard<C: Consensus>(
     data: web::Data<Arc<Mutex<Chain<C>>>>,
     app_state: web::Data<server::AppState<C>>,
 ) -> impl Responder {
-    let chain = data.lock().unwrap();
+    let chain = data.lock().await;
 
     let template = DashboardTemplate {
         blocks: &chain.chain,
@@ -61,7 +62,7 @@ pub async fn render_blocks_list<C: Consensus>(
     data: web::Data<Arc<Mutex<Chain<C>>>>,
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
-    let chain = data.lock().unwrap();
+    let chain = data.lock().await;
     let order = query.get("order").map(|s| s.as_str()).unwrap_or("desc");
     let mut blocks = chain.chain.clone();
     if order == "asc" {
@@ -82,7 +83,7 @@ pub async fn submit_message<C: Consensus>(
     let message = form.get("message").cloned().unwrap_or_default();
 
     let submission_result = {
-        let mut chain = data.lock().unwrap();
+        let mut chain = data.lock().await;
         chain.submit_message_to_mempool(message)
     };
 
@@ -93,7 +94,7 @@ pub async fn submit_message<C: Consensus>(
     let timestamp = chrono::Utc::now().timestamp();
 
     let block_option = {
-        let mut chain = data.lock().unwrap();
+        let mut chain = data.lock().await;
         chain.new_block(timestamp).await
     };
 
@@ -112,7 +113,7 @@ pub async fn submit_message<C: Consensus>(
 pub async fn render_nodes_list<C: Consensus>(
     data: web::Data<Arc<Mutex<Chain<C>>>>,
 ) -> impl Responder {
-    let chain = data.lock().unwrap();
+    let chain = data.lock().await;
     let nodes: Vec<String> = chain.nodes.clone().into_iter().collect();
 
     let template = NodesListTemplate { nodes };
@@ -151,10 +152,10 @@ pub async fn register_node_form<C: Consensus>(
         }
     } else {
         {
-            let mut chain = data.lock().unwrap();
+            let mut chain = data.lock().await;
             chain.add_node(&address);
         }
-        let chain_clone = data.lock().unwrap().clone();
+        let chain_clone = data.lock().await.clone();
 
         let template = NodeResultTemplate {
             success: true,
