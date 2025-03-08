@@ -108,6 +108,11 @@ impl Mempool {
             self.pending_messages.remove(id);
             self.message_added_at.remove(id);
         }
+        println!(
+            "Removed {} messages from mempool. {} remaining",
+            ids.len(),
+            self.pending_count();
+        )
     }
 
     pub fn clean_expired_messages(&mut self) {

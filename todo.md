@@ -6,6 +6,7 @@
 - [ ] Fix that the frontend send works again.
 - [ ] Fix that mining of blocks is suspended such that there are no duplicate transactions. 
 - [ ] Pending should show all received but not yet in chain transactions
+- [ ] in run server remove_messages = check and only remove those that are in the block. not those that aren't.
 
 ## High Priority
 - [ ] Figure out the proper logic when it does mine itself and when does it not do it. E.g. the generate and mempool/generate endpoint -- is that even necessary anymore? 

@@ -345,8 +345,14 @@ where
     tokio::spawn(async move {
         while let Some((block, message_ids)) = block_rx.recv().await {
             let mut chain = block_receiver_chain_data.lock().await;
+            println!(
+                "Received Block #{}, removing {} messages",
+                block.index,
+                message_ids.len()
+            );
+            //TODO: CRITICAL: Only remove if the msgs are in the chain.
+            chain.mempool.remove_messages(&message_ids);
             if chain.chain.len() as u64 == block.index {
-                chain.mempool.remove_messages(&message_ids);
                 chain.chain.push(block.clone());
 
                 let block_hash = block.hash.clone();
@@ -366,7 +372,15 @@ where
                 });
                 println!("Block #{} added to chain", block_index);
             } else {
-                println!("Chain changed during mining, discarding block");
+                println!(
+                    "Chain changed during mining, discarding block #{}",
+                    block.index
+                );
+                if let Err(e) =
+                    synchronize_chain(&block_receiver_chain_data, &block_receiver_chain_info).await
+                {
+                    eprintln!("Error synching chain after discard", e);
+                }
             }
         }
     });
