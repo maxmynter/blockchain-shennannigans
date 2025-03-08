@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
 use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::{mpsc, oneshot};
 use uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,25 +31,31 @@ impl MessageTransaction {
 
 #[derive(Clone)]
 pub struct MessageQueue {
-    sender: mpsc::Sender<String>,
+    sender: mpsc::Sender<(String, oneshot::Sender<()>)>,
 }
 
 impl MessageQueue {
     pub fn new(mempool: Arc<TokioMutex<Mempool>>) -> Self {
-        let (tx, mut rx) = mpsc::channel::<String>(100);
+        let (tx, mut rx) = mpsc::channel::<(String, oneshot::Sender<()>)>(100);
 
         tokio::spawn(async move {
-            while let Some(message) = rx.recv().await {
+            while let Some((message, confirmation)) = rx.recv().await {
                 let mut pool = mempool.lock().await;
                 let _ = pool.add_message(message);
+                let _ = confirmation.send(());
             }
         });
         MessageQueue { sender: tx }
     }
 
     pub async fn submit_message(&self, message: String) -> Result<(), String> {
-        match self.sender.send(message).await {
-            Ok(_) => Ok(()),
+        let (tx, rx) = oneshot::channel();
+        match self.sender.send((message, tx)).await {
+            Ok(_) => {
+                rx.await
+                    .map_err(|_| "Failed to receive queuing confirmation".to_string())?;
+                Ok(())
+            }
             Err(_) => Err("Failed to send queue message".to_string()),
         }
     }
