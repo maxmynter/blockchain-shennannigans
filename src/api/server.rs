@@ -1,5 +1,7 @@
 use crate::api::client;
-use crate::blockchain::{Block, Chain, Consensus, Mempool, MessageTransaction};
+use crate::blockchain::{
+    Block, Chain, Consensus, Mempool, MessageTransaction, MiningCommand, MiningCoordinator,
+};
 use crate::frontend::routes::{
     register_node_form, render_blocks_list, render_dashboard, render_nodes_list,
 };
@@ -8,11 +10,14 @@ use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc::Sender;
 
-pub struct AppState {
+pub struct AppState<C: Consensus> {
     pub poll_interval_s: u64,
     pub chain_file: String,
+    pub mining_tx: Sender<MiningCommand>,
+    _consensus_type: std::marker::PhantomData<C>,
 }
 
 #[derive(Deserialize)]
@@ -40,14 +45,14 @@ pub async fn alive() -> impl Responder {
 }
 
 // Get /chain: Returns current chain
-pub async fn get_chain<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn get_chain<C: Consensus>(data: web::Data<Arc<Mutex<Chain<C>>>>) -> impl Responder {
     let chain = data.lock().unwrap();
     HttpResponse::Ok().json(chain.chain.clone())
 }
 
 // Post /block : Receives a new block and validates it
 pub async fn post_block<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
     req: HttpRequest,
     block: web::Json<Block<C::Proof>>,
 ) -> impl Responder
@@ -98,7 +103,7 @@ where
 }
 
 pub async fn register_node<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
     req: web::Json<NodeRequest>,
 ) -> impl Responder {
     let new_address = req.address.clone();
@@ -119,7 +124,7 @@ pub async fn register_node<C: Consensus>(
     HttpResponse::Ok().body(format!("Node {} registered", req.address))
 }
 
-pub async fn get_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn get_nodes<C: Consensus>(data: web::Data<Arc<Mutex<Chain<C>>>>) -> impl Responder {
     let chain = data.lock().unwrap();
     let nodes = chain.nodes.clone();
     let registered_nodes = RegisteredNodes { nodes };
@@ -128,7 +133,7 @@ pub async fn get_nodes<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl R
 }
 
 async fn synchronize_chain<C: Consensus>(
-    chain_data: &web::Data<Mutex<Chain<C>>>,
+    chain_data: &Arc<Mutex<Chain<C>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let nodes = {
         let chain = chain_data.lock().unwrap();
@@ -170,17 +175,24 @@ async fn synchronize_chain<C: Consensus>(
 }
 
 pub async fn submit_message<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
+    app_state: web::Data<AppState<C>>,
     req: web::Json<MessageRequest>,
 ) -> impl Responder {
-    let mut chain = data.lock().unwrap();
-    match chain.submit_message_to_mempool(req.message.clone()) {
+    let result = {
+        let mut chain = data.lock().unwrap();
+        chain.submit_message_to_mempool(req.message.clone())
+    };
+
+    let _ = app_state.mining_tx.send(MiningCommand::StartMining).await;
+
+    match result {
         Ok(transaction) => HttpResponse::Ok().json(transaction),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
 
-pub async fn generate_block<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder
+pub async fn generate_block<C: Consensus>(data: web::Data<Arc<Mutex<Chain<C>>>>) -> impl Responder
 where
     C::Proof: Serialize,
     Block<C::Proof>: Serialize,
@@ -214,7 +226,7 @@ where
 }
 
 pub async fn get_pending_transactions<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
 ) -> impl Responder {
     let chain = data.lock().unwrap();
 
@@ -230,6 +242,16 @@ pub async fn get_pending_transactions<C: Consensus>(
     })
 }
 
+pub async fn start_mining<C: Consensus>(app_state: web::Data<AppState<C>>) -> impl Responder {
+    let _ = app_state.mining_tx.send(MiningCommand::StartMining).await;
+    HttpResponse::Ok().body("Mining Started")
+}
+
+pub async fn stop_mining<C: Consensus>(app_state: web::Data<AppState<C>>) -> impl Responder {
+    let _ = app_state.mining_tx.send(MiningCommand::StopMining).await;
+    HttpResponse::Ok().body("Stopped Mining")
+}
+
 fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
     cfg.route("/chain", web::get().to(get_chain::<C>))
         .route("/block", web::post().to(post_block::<C>))
@@ -238,6 +260,8 @@ fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
         .route("/pending", web::get().to(get_pending_transactions::<C>))
         .route("/nodes", web::get().to(get_nodes::<C>))
         .route("/nodes/register", web::post().to(register_node::<C>))
+        .route("/mining/start", web::post().to(start_mining::<C>))
+        .route("/mining/end", web::post().to(stop_mining::<C>))
         .route("/alive", web::get().to(alive));
 }
 
@@ -262,8 +286,23 @@ pub async fn run_server<C: Consensus>(
 where
     C::Proof: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    let chain_data = web::Data::new(Mutex::new(chain));
+    let chain_data = Arc::new(Mutex::new(chain));
+    let web_chain_data = web::Data::new(chain_data.clone());
     println!("Starting rustchain node on port {}", address);
+
+    let (mut mining_coordinator, mining_tx) = MiningCoordinator::new(chain_data.clone(), 100);
+    tokio::spawn(async move {
+        mining_coordinator.run().await;
+    });
+
+    let app_state = web::Data::new(AppState::<C> {
+        poll_interval_s: super::POLL_INTERVAL_S,
+        chain_file: chain_file.clone(),
+        mining_tx: mining_tx.clone(),
+        _consensus_type: std::marker::PhantomData,
+    });
+
+    let _ = mining_tx.send(MiningCommand::StartMining).await;
 
     let consensus_data = chain_data.clone();
     tokio::spawn(async move {
@@ -279,27 +318,25 @@ where
     let persistence_data = chain_data.clone();
     let chain_file_clone = chain_file.clone();
     tokio::spawn(async move {
+        // TODO: Parametrize
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
         loop {
             interval.tick().await;
-            if let Ok(chain) = persistence_data.lock() {
-                if let Err(e) = chain.save_to_file(&chain_file_clone) {
-                    eprintln!("Error saving chain: {}", e);
-                } else {
-                    println!("Chain saved to {}", chain_file_clone);
-                }
+            let save_result = {
+                let chain = persistence_data.lock().unwrap();
+                chain.save_to_file(&chain_file_clone)
+            };
+            if let Err(e) = save_result {
+                eprintln!("Error saving chain: {}", e);
+            } else {
+                println!("Chain saved to {}", chain_file_clone);
             }
         }
     });
 
-    let app_state = web::Data::new(AppState {
-        poll_interval_s: super::POLL_INTERVAL_S,
-        chain_file,
-    });
-
     HttpServer::new(move || {
         App::new()
-            .app_data(chain_data.clone())
+            .app_data(web_chain_data.clone())
             .app_data(app_state.clone())
             .configure(configure_api_routes::<C>)
             .configure(configure_frontend_routes::<C>)

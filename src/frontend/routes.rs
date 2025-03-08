@@ -4,7 +4,7 @@ use actix_web::rt::spawn;
 use actix_web::{web, HttpResponse, Responder};
 use askama::Template;
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Template)]
 #[template(path = "views/dashboard.html")]
@@ -40,8 +40,8 @@ struct NodesListTemplate {
 }
 
 pub async fn render_dashboard<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
-    app_state: web::Data<server::AppState>,
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
+    app_state: web::Data<server::AppState<C>>,
 ) -> impl Responder {
     let chain = data.lock().unwrap();
 
@@ -58,7 +58,7 @@ pub async fn render_dashboard<C: Consensus>(
 }
 
 pub async fn render_blocks_list<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
     query: web::Query<HashMap<String, String>>,
 ) -> impl Responder {
     let chain = data.lock().unwrap();
@@ -76,7 +76,7 @@ pub async fn render_blocks_list<C: Consensus>(
 }
 
 pub async fn submit_message<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
     form: web::Form<HashMap<String, String>>,
 ) -> impl Responder {
     let message = form.get("message").cloned().unwrap_or_default();
@@ -109,7 +109,9 @@ pub async fn submit_message<C: Consensus>(
     }
 }
 
-pub async fn render_nodes_list<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -> impl Responder {
+pub async fn render_nodes_list<C: Consensus>(
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
+) -> impl Responder {
     let chain = data.lock().unwrap();
     let nodes: Vec<String> = chain.nodes.clone().into_iter().collect();
 
@@ -121,7 +123,7 @@ pub async fn render_nodes_list<C: Consensus>(data: web::Data<Mutex<Chain<C>>>) -
 }
 
 pub async fn register_node_form<C: Consensus>(
-    data: web::Data<Mutex<Chain<C>>>,
+    data: web::Data<Arc<Mutex<Chain<C>>>>,
     form: web::Form<HashMap<String, String>>,
 ) -> impl Responder {
     let address = form.get("address").cloned().unwrap_or_default();

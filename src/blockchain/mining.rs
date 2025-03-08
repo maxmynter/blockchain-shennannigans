@@ -37,6 +37,10 @@ where
             command_tx,
         )
     }
+    async fn prove_with_chain(&self, consensus: &C, data: &str) -> C::Proof {
+        let chain = self.chain_data.lock().unwrap();
+        consensus.prove(&chain, data).await
+    }
 
     pub async fn run(&mut self) {
         loop {
@@ -107,10 +111,7 @@ where
             )
         };
 
-        let proof = {
-            let chain = self.chain_data.lock().unwrap();
-            consensus.prove(&chain, &data).await
-        };
+        let proof = self.prove_with_chain(&consensus, &data).await;
 
         let block = Block::new(chain_len, data, timestamp, proof, prev_hash);
         {
