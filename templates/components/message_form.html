@@ -1,6 +1,7 @@
 <div class="container">
 	<h2>Add New Block</h2>
-	<form hx-post="/message" hx-target="#blocks" hx-swap="afterbegin">
+	<form hx-post="/message" hx-target="#blocks" hx-swap="afterbegin"
+		hx-on::after-request="if(event.detail.successful) {this.reset();}">
 		<input type="text" name="message" placeholder="Enter a message to write to Rustchain">
 		<button type="submit">
 			Send
