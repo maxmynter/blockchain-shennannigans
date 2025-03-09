@@ -1,5 +1,5 @@
 use crate::api::{client, server};
-use crate::blockchain::{Block, Chain, Consensus};
+use crate::blockchain::{Block, Chain, Consensus, MessageQueue, MiningCommand};
 use actix_web::rt::spawn;
 use actix_web::{web, HttpResponse, Responder};
 use askama::Template;
@@ -76,37 +76,18 @@ pub async fn render_blocks_list<C: Consensus>(
     }
 }
 
-pub async fn submit_message<C: Consensus>(
-    data: web::Data<Arc<Mutex<Chain<C>>>>,
+pub async fn handle_message_from_submit<C: Consensus>(
+    message_queue: web::Data<MessageQueue>,
+    app_state: web::Data<server::AppState<C>>,
     form: web::Form<HashMap<String, String>>,
 ) -> impl Responder {
     let message = form.get("message").cloned().unwrap_or_default();
-
-    let submission_result = {
-        let mut chain = data.lock().await;
-        chain.submit_message_to_mempool(message)
-    };
-
-    if let Err(e) = submission_result {
-        return HttpResponse::InternalServerError().body(e.to_string());
-    }
-
-    let timestamp = chrono::Utc::now().timestamp();
-
-    let block_option = {
-        let mut chain = data.lock().await;
-        chain.new_block(timestamp).await
-    };
-
-    match block_option {
-        Some(ref block) => {
-            let template = BlockTemplate { block };
-            match template.render() {
-                Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
-                Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
-            }
+    match message_queue.submit_message(message).await {
+        Ok(_) => {
+            let _ = app_state.mining_tx.try_send(MiningCommand::StartMining);
+            HttpResponse::Ok().body("Message submitted. Starting to mine.")
         }
-        None => HttpResponse::Ok().body("Message submitted to mempool and waiting to be minded."),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
 

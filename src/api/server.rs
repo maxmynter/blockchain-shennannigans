@@ -4,7 +4,8 @@ use crate::blockchain::{
     MiningCoordinator, MiningInterface,
 };
 use crate::frontend::routes::{
-    register_node_form, render_blocks_list, render_dashboard, render_nodes_list,
+    handle_message_from_submit, register_node_form, render_blocks_list, render_dashboard,
+    render_nodes_list,
 };
 use actix_web::rt::spawn;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
@@ -192,7 +193,7 @@ async fn synchronize_chain<C: Consensus>(
     Ok(())
 }
 
-pub async fn submit_message<C: Consensus>(
+pub async fn api_submit_message<C: Consensus>(
     message_queue: web::Data<MessageQueue>,
     app_state: web::Data<AppState<C>>,
     req: web::Json<MessageRequest>,
@@ -277,7 +278,7 @@ fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
     cfg.route("/chain", web::get().to(get_chain::<C>))
         .route("/block", web::post().to(post_block::<C>))
         .route("/generate", web::post().to(generate_block::<C>))
-        .route("/submit", web::post().to(submit_message::<C>))
+        .route("/submit", web::post().to(api_submit_message::<C>))
         .route("/pending", web::get().to(get_pending_transactions::<C>))
         .route("/nodes", web::get().to(get_nodes::<C>))
         .route("/nodes/register", web::post().to(register_node::<C>))
@@ -288,7 +289,7 @@ fn configure_api_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
 
 fn configure_frontend_routes<C: Consensus>(cfg: &mut web::ServiceConfig) {
     cfg.route("/", web::get().to(render_dashboard::<C>))
-        .route("/message", web::post().to(submit_message::<C>))
+        .route("/message", web::post().to(handle_message_from_submit::<C>))
         .route("/web/nodes", web::get().to(render_nodes_list::<C>))
         .route(
             "/web/nodes/register",
@@ -379,7 +380,7 @@ where
                 if let Err(e) =
                     synchronize_chain(&block_receiver_chain_data, &block_receiver_chain_info).await
                 {
-                    eprintln!("Error synching chain after discard", e);
+                    eprintln!("Error synching chain after discard: {}", e);
                 }
             }
         }
